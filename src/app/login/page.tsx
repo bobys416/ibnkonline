@@ -3,6 +3,8 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { signInWithSupabase, signInWithOAuth } from "@/lib/supabase/auth";
+import { isSupabaseConfigured } from "@/lib/supabase/client";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -10,11 +12,41 @@ export default function LoginPage() {
   const [password, setPassword] = useState("Customer@123456");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [oauthBusy, setOauthBusy] = useState(false);
+
+  const hasSupabase = isSupabaseConfigured();
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
     setError("");
+
+    // 1. If Supabase is configured, authenticate via Supabase Auth
+    if (hasSupabase) {
+      try {
+        const result = await signInWithSupabase(email, password);
+        if (result.success && result.user) {
+          localStorage.setItem(
+            "buymecart.session",
+            JSON.stringify({
+              id: result.user.id,
+              email: result.user.email,
+              fullName: result.user.fullName,
+              provider: "supabase",
+            })
+          );
+          router.push("/account");
+          return;
+        } else if (result.error) {
+          // If Supabase returned an error, display it or attempt fallback
+          console.warn("Supabase signin note:", result.error);
+        }
+      } catch (err) {
+        console.warn("Supabase auth fallback triggered:", err);
+      }
+    }
+
+    // 2. Local / Mock / Demo fallback API authentication
     try {
       const res = await fetch("/api/auth/login", {
         method: "POST",
@@ -37,22 +69,113 @@ export default function LoginPage() {
     }
   }
 
+  async function handleGoogleSignIn() {
+    setOauthBusy(true);
+    setError("");
+    try {
+      const res = await signInWithOAuth("google");
+      if (!res.success && res.error) {
+        setError(res.error);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Google sign in error");
+    } finally {
+      setOauthBusy(false);
+    }
+  }
+
   return (
     <div className="max-w-md mx-auto px-4 py-16">
-      <div className="bg-white rounded-3xl border p-8 space-y-4">
-        <h1 className="text-3xl font-black">Sign in</h1>
-        <p className="text-sm text-slate-600">Use your IBNK account or continue as a demo customer.</p>
+      <div className="bg-white rounded-3xl border border-slate-200/80 p-8 space-y-5 shadow-sm">
+        <div>
+          <h1 className="text-3xl font-black text-[#172033]">Sign in</h1>
+          <p className="text-sm text-slate-600 mt-1">
+            Access your iBNK orders, wishlist, and exclusive member savings.
+          </p>
+        </div>
+
+        {/* Google OAuth Button */}
+        {hasSupabase && (
+          <div>
+            <button
+              type="button"
+              onClick={handleGoogleSignIn}
+              disabled={oauthBusy}
+              className="w-full flex items-center justify-center gap-3 py-2.5 px-4 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 font-bold text-sm transition-all shadow-xs"
+            >
+              <svg className="w-4 h-4" viewBox="0 0 24 24">
+                <path
+                  fill="#4285F4"
+                  d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                />
+                <path
+                  fill="#34A853"
+                  d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                />
+                <path
+                  fill="#FBBC05"
+                  d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+                />
+                <path
+                  fill="#EA4335"
+                  d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+                />
+              </svg>
+              {oauthBusy ? "Connecting to Google…" : "Continue with Google"}
+            </button>
+            <div className="relative my-4 text-center">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-slate-200" />
+              </div>
+              <span className="relative bg-white px-3 text-xs text-slate-400 font-semibold uppercase">Or with email</span>
+            </div>
+          </div>
+        )}
+
         <form onSubmit={onSubmit} className="space-y-3">
-          <input className="w-full rounded-xl border px-4 py-2.5 text-sm" value={email} onChange={(e) => setEmail(e.target.value)} type="email" required />
-          <input className="w-full rounded-xl border px-4 py-2.5 text-sm" value={password} onChange={(e) => setPassword(e.target.value)} type="password" required />
-          {error && <p className="text-sm text-rose-600">{error}</p>}
-          <button disabled={busy} className="w-full py-3 rounded-full bg-[#FF7900] hover:bg-[#e06a00] text-white font-black shadow-md transition-all">
+          <div>
+            <label className="block text-xs font-bold text-slate-700 mb-1">Email</label>
+            <input
+              className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-[#1554D1] focus:ring-2 focus:ring-[#1554D1]/20 transition-all"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              type="email"
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-700 mb-1">Password</label>
+            <input
+              className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-[#1554D1] focus:ring-2 focus:ring-[#1554D1]/20 transition-all"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              type="password"
+              required
+            />
+          </div>
+
+          {error && <p className="text-sm text-rose-600 bg-rose-50 border border-rose-200 p-2.5 rounded-xl">{error}</p>}
+
+          <button
+            type="submit"
+            disabled={busy}
+            className="w-full py-3 rounded-full bg-[#FF7900] hover:bg-[#e06a00] text-white font-black shadow-md transition-all active:scale-98"
+          >
             {busy ? "Signing in…" : "Sign in"}
           </button>
         </form>
-        <p className="text-xs text-slate-500">
-          New here? <Link href="/register" className="text-[#1554D1] font-bold">Create an account</Link>
-        </p>
+
+        <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-100">
+          <span className="text-slate-500">
+            New here?{" "}
+            <Link href="/register" className="text-[#1554D1] font-bold hover:underline">
+              Create an account
+            </Link>
+          </span>
+          <Link href="/help" className="text-slate-400 hover:text-slate-600">
+            Need help?
+          </Link>
+        </div>
       </div>
     </div>
   );
