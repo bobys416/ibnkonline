@@ -1,0 +1,108 @@
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/root_container"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#FAFAF7">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:background="#FFFFFF"
+            android:elevation="2dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingHorizontal="8dp">
+
+            <Button
+                android:id="@+id/back_button"
+                style="@style/ToolbarButton"
+                android:contentDescription="@string/back"
+                android:text="‹" />
+
+            <Button
+                android:id="@+id/home_button"
+                style="@style/ToolbarButton"
+                android:contentDescription="@string/home"
+                android:text="⌂" />
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:gravity="center"
+                android:text="@string/app_name"
+                android:textColor="#172033"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+
+            <Button
+                android:id="@+id/retry_button"
+                style="@style/ToolbarButton"
+                android:contentDescription="@string/reload"
+                android:text="⟳" />
+
+            <Button
+                android:id="@+id/share_button"
+                style="@style/ToolbarButton"
+                android:contentDescription="@string/share"
+                android:text="↗" />
+        </LinearLayout>
+
+        <ProgressBar
+            android:id="@+id/loading_progress"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent"
+            android:layout_height="2dp"
+            android:indeterminate="true"
+            android:visibility="gone" />
+
+        <WebView
+            android:id="@+id/web_view"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/offline_panel"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#FAFAF7"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:padding="32dp"
+        android:visibility="gone">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:text="@string/offline_title"
+            android:textColor="#172033"
+            android:textSize="22sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:gravity="center"
+            android:text="@string/offline_message"
+            android:textColor="#475569"
+            android:textSize="15sp" />
+
+        <Button
+            android:id="@+id/offline_retry_button"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:backgroundTint="#1554D1"
+            android:text="@string/retry"
+            android:textColor="#FFFFFF" />
+    </LinearLayout>
+</FrameLayout>

@@ -146,7 +146,8 @@ export function Header() {
     setLocationMessage("Verifying PIN code coverage...");
     setLocationMessageType("info");
     try {
-      const serviceability = await checkDeliveryServiceability(zipCode);
+      const result = await checkDeliveryServiceability(zipCode);
+      const serviceability = result.serviceability;
       const baseLocation =
         locationPreview?.pinCode === zipCode
           ? locationPreview
@@ -155,19 +156,30 @@ export function Header() {
             : {
                 addressLine1: "",
                 addressLine2: "",
-                landmark: "",
-                city: "",
-                state: "",
+                landmark: result.area || "",
+                city: result.city || "",
+                state: result.state || "",
                 pinCode: zipCode,
-                displayName: "",
+                displayName: [result.area, result.city, result.state].filter(Boolean).join(", "),
                 serviceability: serviceability,
               };
-      setLocationPreview({ ...baseLocation, pinCode: zipCode, serviceability });
+
+      const updatedLocation = {
+        ...baseLocation,
+        pinCode: zipCode,
+        serviceability,
+        city: baseLocation.city || result.city || "",
+        state: baseLocation.state || result.state || "",
+        landmark: baseLocation.landmark || result.area || "",
+      };
+
+      setLocationPreview(updatedLocation);
       if (serviceability === "unavailable") {
-        setLocationMessage(`Delivery is currently unavailable for PIN ${zipCode}. You may still save it as your address.`);
+        setLocationMessage(`Delivery is currently limited for PIN ${zipCode}. You may still save it as your address.`);
         setLocationMessageType("error");
       } else {
-        setLocationMessage(`Delivery coverage confirmed for PIN ${zipCode}. Click "Use this location" to apply.`);
+        const placeName = [updatedLocation.city, updatedLocation.state].filter(Boolean).join(", ");
+        setLocationMessage(`Delivery confirmed for ${placeName ? placeName + " (" + zipCode + ")" : "PIN " + zipCode}. Click "Use this location" below.`);
         setLocationMessageType("success");
       }
     } catch (error) {
@@ -256,7 +268,7 @@ export function Header() {
               ? "Your device could not acquire satellite/network position. Please enter your PIN code manually."
               : "Location detection timed out. Please try again or enter your PIN code manually.";
         setLocationMessage(message);
-        setLocationMessageType("error");
+        setLocationMessageType("info");
         setIsDetectingLocation(false);
       },
       { enableHighAccuracy: false, maximumAge: 300_000, timeout: 15_000 }

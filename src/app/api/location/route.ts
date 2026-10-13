@@ -61,15 +61,25 @@ function firstAddress(data: unknown): GeoapifyAddress | undefined {
 }
 
 export function getServiceability(pinCode: string): "available" | "unavailable" | "unknown" {
+  if (!/^[1-9]\d{5}$/.test(pinCode)) {
+    return "unknown";
+  }
+
   const configuredPins = process.env.SERVICEABLE_PIN_CODES?.split(",")
     .map((pin) => pin.trim())
     .filter(Boolean);
 
-  if (!configuredPins?.length) return "unknown";
-  if (configuredPins.some((pin) => !/^[1-9]\d{5}$/.test(pin))) {
-    throw new Error("SERVICEABLE_PIN_CODES contains an invalid PIN code.");
+  // If no restricted PIN list is set (or configured with '*'), delivery is available nationwide across India!
+  if (!configuredPins?.length || configuredPins.includes("*")) {
+    return "available";
   }
-  return configuredPins.includes(pinCode) ? "available" : "unavailable";
+
+  const validPins = configuredPins.filter((pin) => /^[1-9]\d{5}$/.test(pin));
+  if (!validPins.length) {
+    return "available";
+  }
+
+  return validPins.includes(pinCode) ? "available" : "unavailable";
 }
 
 export async function GET(request: NextRequest) {
@@ -202,15 +212,41 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  const pinCode = body.pinCode;
+  const serviceability = getServiceability(pinCode);
+
+  let city = "";
+  let state = "";
+  let area = "";
+
   try {
-    return NextResponse.json({
-      pinCode: body.pinCode,
-      serviceability: getServiceability(body.pinCode),
+    const postalRes = await fetch(`https://api.postalpincode.in/pincode/${pinCode}`, {
+      signal: AbortSignal.timeout(3000),
+      cache: "force-cache",
     });
+    if (postalRes.ok) {
+      const data = await postalRes.json();
+      if (
+        Array.isArray(data) &&
+        data[0]?.Status === "Success" &&
+        Array.isArray(data[0]?.PostOffice) &&
+        data[0].PostOffice.length > 0
+      ) {
+        const po = data[0].PostOffice[0];
+        city = po.District || po.Division || "";
+        state = po.State || "";
+        area = po.Name || "";
+      }
+    }
   } catch {
-    return NextResponse.json(
-      { error: "Delivery PIN-code coverage is configured incorrectly." },
-      { status: 500 }
-    );
+    // Fallback if external postal API lookup times out
   }
+
+  return NextResponse.json({
+    pinCode,
+    serviceability,
+    city,
+    state,
+    area,
+  });
 }

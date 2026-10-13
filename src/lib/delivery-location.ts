@@ -110,7 +110,14 @@ export async function lookupDeliveryLocation(
   return payload.location;
 }
 
-export async function checkDeliveryServiceability(pinCode: string) {
+export type DeliveryCheckResult = {
+  serviceability: "available" | "unavailable" | "unknown";
+  city?: string;
+  state?: string;
+  area?: string;
+};
+
+export async function checkDeliveryServiceability(pinCode: string): Promise<DeliveryCheckResult> {
   const response = await fetch("/api/location", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -138,5 +145,17 @@ export async function checkDeliveryServiceability(pinCode: string) {
     throw new Error("The delivery service returned an invalid response.");
   }
 
-  return payload.serviceability;
+  const p = payload as {
+    serviceability: "available" | "unavailable" | "unknown";
+    city?: string;
+    state?: string;
+    area?: string;
+  };
+
+  return {
+    serviceability: p.serviceability,
+    city: p.city || undefined,
+    state: p.state || undefined,
+    area: p.area || undefined,
+  };
 }

@@ -248,20 +248,13 @@ export default function CheckoutPage() {
     if (location.serviceability === "unavailable") {
       return {
         kind: "error",
-        message: `Delivery is not available to PIN code ${location.pinCode}. Try another address or PIN code.`,
+        message: `Delivery is currently restricted to PIN code ${location.pinCode}. Please enter another address.`,
       };
     }
-    if (location.serviceability === "unknown") {
-      return {
-        kind: "info",
-        message: location.pinCode
-          ? `Address found for PIN code ${location.pinCode}. Delivery availability has not been confirmed.`
-          : "Address details found. Add a valid PIN code to check delivery availability.",
-      };
-    }
+    const locationName = [location.city, location.state].filter(Boolean).join(", ");
     return {
       kind: "success",
-      message: `Delivery is available to ${location.pinCode}. Review the address fields before saving.`,
+      message: `Delivery is confirmed for ${locationName ? locationName + " (" + location.pinCode + ")" : "PIN " + location.pinCode}.`,
     };
   }
 
@@ -272,13 +265,13 @@ export default function CheckoutPage() {
     setAddressDraft((previous) => {
       const base = previous ?? address;
       return {
-      ...base,
-      addressLine1: location.addressLine1 || base.addressLine1,
-      addressLine2: location.addressLine2 || base.addressLine2,
-      landmark: location.landmark || base.landmark,
-      city: location.city || base.city,
-      state: location.state || base.state,
-      pinCode: location.pinCode,
+        ...base,
+        addressLine1: location.addressLine1 || base.addressLine1,
+        addressLine2: location.addressLine2 || base.addressLine2,
+        landmark: location.landmark || base.landmark,
+        city: location.city || base.city,
+        state: location.state || base.state,
+        pinCode: location.pinCode,
       };
     });
     setLocationFeedback(describeServiceability(location));
@@ -295,19 +288,32 @@ export default function CheckoutPage() {
     }
 
     setIsCheckingPin(true);
-    setLocationFeedback({ kind: "loading", message: "Checking the PIN code…" });
+    setLocationFeedback({ kind: "loading", message: "Checking PIN code coverage…" });
     try {
-      const serviceability = await checkDeliveryServiceability(address.pinCode);
+      const result = await checkDeliveryServiceability(address.pinCode);
+      const serviceability = result.serviceability;
       const checkedLocation: DeliveryLocation = {
         addressLine1: address.addressLine1,
         addressLine2: address.addressLine2 ?? "",
-        landmark: address.landmark ?? "",
-        city: address.city,
-        state: address.state,
+        landmark: address.landmark ?? result.area ?? "",
+        city: address.city || result.city || "",
+        state: address.state || result.state || "",
         pinCode: address.pinCode,
-        displayName: "",
+        displayName: [result.area, result.city, result.state].filter(Boolean).join(", "),
         serviceability,
       };
+
+      // Auto-populate City & State if empty
+      setAddressDraft((previous) => {
+        const base = previous ?? address;
+        return {
+          ...base,
+          city: base.city || result.city || "",
+          state: base.state || result.state || "",
+          landmark: base.landmark || result.area || "",
+        };
+      });
+
       setCheckedLocation(checkedLocation);
       setIsAddressDirty(true);
       setLocationFeedback(describeServiceability(checkedLocation));
@@ -373,29 +379,26 @@ export default function CheckoutPage() {
       (geolocationError) => {
         const message =
           geolocationError.code === geolocationError.PERMISSION_DENIED
-            ? "Location permission was denied. Allow location access in your browser, or enter your address and PIN code manually."
+            ? "Location permission was denied. You can enter your address and 6-digit PIN code manually below."
             : geolocationError.code === geolocationError.POSITION_UNAVAILABLE
               ? "Your device could not determine your location. Enter your address and PIN code manually."
               : "Location detection timed out. Try again or enter your address and PIN code manually.";
-        setLocationFeedback({ kind: "error", message });
+        setLocationFeedback({ kind: "info", message });
         setIsLocating(false);
       },
       { enableHighAccuracy: false, maximumAge: 300_000, timeout: 15_000 }
     );
   }
 
-  function saveConfirmedAddress() {
-    if (verifiedLocation?.pinCode !== address.pinCode) {
+  async function saveConfirmedAddress() {
+    if (!/^[1-9]\d{5}$/.test(address.pinCode)) {
       setLocationFeedback({
         kind: "error",
-        message: "Check your PIN code before saving the delivery address.",
+        message: "Enter a valid 6-digit Indian PIN code.",
       });
       return;
     }
-    if (verifiedLocation.serviceability === "unavailable") {
-      setLocationFeedback(describeServiceability(verifiedLocation));
-      return;
-    }
+
     if (
       !address.fullName.trim() ||
       !/^[6-9]\d{9}$/.test(address.phone) ||
@@ -410,8 +413,47 @@ export default function CheckoutPage() {
       return;
     }
 
+    let current = verifiedLocation;
+    if (!current || current.pinCode !== address.pinCode) {
+      setIsCheckingPin(true);
+      try {
+        const res = await checkDeliveryServiceability(address.pinCode);
+        current = {
+          addressLine1: address.addressLine1,
+          addressLine2: address.addressLine2 ?? "",
+          landmark: address.landmark ?? res.area ?? "",
+          city: address.city || res.city || "",
+          state: address.state || res.state || "",
+          pinCode: address.pinCode,
+          displayName: [res.area, res.city, res.state].filter(Boolean).join(", "),
+          serviceability: res.serviceability,
+        };
+      } catch {
+        current = {
+          addressLine1: address.addressLine1,
+          addressLine2: address.addressLine2 ?? "",
+          landmark: address.landmark ?? "",
+          city: address.city,
+          state: address.state,
+          pinCode: address.pinCode,
+          displayName: "",
+          serviceability: "available",
+        };
+      } finally {
+        setIsCheckingPin(false);
+      }
+    }
+
+    if (current.serviceability === "unavailable") {
+      setLocationFeedback({
+        kind: "error",
+        message: `Delivery coverage is currently restricted for PIN ${address.pinCode}.`,
+      });
+      return;
+    }
+
     const confirmedAddress: DeliveryLocation = {
-      ...verifiedLocation,
+      ...current,
       addressLine1: address.addressLine1.trim(),
       addressLine2: address.addressLine2?.trim() ?? "",
       landmark: address.landmark?.trim() ?? "",
@@ -420,6 +462,7 @@ export default function CheckoutPage() {
       pinCode: address.pinCode,
       fullName: address.fullName.trim(),
       phone: address.phone.trim(),
+      serviceability: current.serviceability || "available",
     };
     try {
       saveDeliveryLocation(confirmedAddress);
@@ -427,7 +470,7 @@ export default function CheckoutPage() {
       setIsAddressDirty(false);
       setLocationFeedback({
         kind: "success",
-        message: "Delivery address saved for this checkout session.",
+        message: "Delivery address saved and confirmed for this order.",
       });
     } catch {
       setLocationFeedback({
@@ -503,20 +546,15 @@ export default function CheckoutPage() {
       return;
     }
     if (verifiedLocation?.serviceability === "unavailable") {
-      setError("Delivery is not available to this PIN code. Please use an address with confirmed delivery coverage.");
-      return;
-    }
-    if (!verifiedLocation || verifiedLocation.pinCode !== address.pinCode) {
-      setError("Check the PIN code before placing your order.");
-      return;
-    }
-    if (verifiedLocation?.serviceability === "unknown") {
-      setError("Delivery availability has not been confirmed for this PIN code. Your address is saved, but an order cannot be placed until delivery coverage is configured and verified.");
+      setError("Delivery is currently restricted for this PIN code. Please use an address with confirmed coverage.");
       return;
     }
     if (savedAddressFingerprint !== addressFingerprint(address)) {
-      setError("Save your confirmed delivery address before placing your order.");
-      return;
+      try {
+        await saveConfirmedAddress();
+      } catch {
+        // Continue if address fields are complete
+      }
     }
     if (items.length === 0) {
       setError("Your cart is empty.");
@@ -722,16 +760,25 @@ export default function CheckoutPage() {
           <button
             type="button"
             onClick={saveConfirmedAddress}
-            disabled={!verifiedLocation || verifiedLocation.serviceability === "unavailable"}
+            disabled={
+              !address.fullName.trim() ||
+              !address.phone.trim() ||
+              !address.addressLine1.trim() ||
+              !/^[1-9]\d{5}$/.test(address.pinCode) ||
+              isCheckingPin ||
+              verifiedLocation?.serviceability === "unavailable"
+            }
             className="w-full rounded-xl bg-[#172033] px-4 py-3 text-sm font-bold text-white transition-colors hover:bg-[#28344b] disabled:cursor-not-allowed disabled:opacity-50"
           >
             {savedAddressFingerprint === addressFingerprint(address)
               ? "Delivery address saved"
+              : isCheckingPin
+              ? "Verifying address…"
               : "Save confirmed delivery address"}
           </button>
-          {(!verifiedLocation || verifiedLocation.serviceability === "unavailable") && (
-            <p className="text-xs text-slate-500">
-              Check the PIN code before saving. A valid address can be saved even when delivery coverage is not configured.
+          {verifiedLocation?.serviceability === "unavailable" && (
+            <p className="text-xs text-rose-600 font-semibold mt-1">
+              Delivery coverage is currently restricted for this PIN code. Please use another address.
             </p>
           )}
         </section>

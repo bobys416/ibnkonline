@@ -1,0 +1,11 @@
+<resources>
+    <string name="app_name">iBNK</string>
+    <string name="back">Go back</string>
+    <string name="home">Open iBNK home</string>
+    <string name="reload">Reload page</string>
+    <string name="share">Share page</string>
+    <string name="offline_title">You’re offline</string>
+    <string name="offline_message">Check your connection and try loading iBNK again.</string>
+    <string name="retry">Try again</string>
+    <string name="location_permission">Allow iBNK to use your location only when you choose Detect My Location to fill a delivery address. You can enter an address and PIN code manually instead.</string>
+</resources>

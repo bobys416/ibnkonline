@@ -34,6 +34,16 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+/mobile/android/local.properties
+/mobile/android/signing.properties
+/mobile/android/**/*.jks
+/mobile/android/**/*.keystore
+/mobile/android/app/build/
+/mobile/ios/Production.xcconfig
+/mobile/ios/*.xcuserstate
+/mobile/ios/DerivedData/
+/mobile/ios/build/
+/mobile/ios/*.xcodeproj/
 
 # vercel
 .vercel
