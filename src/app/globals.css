@@ -1,0 +1,70 @@
+@import "tailwindcss";
+
+:root {
+  --ibnk-blue: #0071dc;
+  --ibnk-dark-blue: #004f9a;
+  --ibnk-accent: #ffc220;
+  --ibnk-light-blue: #e6f1fc;
+  --ibnk-dark-text: #2e2f32;
+  --ibnk-subtext: #46474a;
+  --ibnk-border: #e3e8ee;
+  --ibnk-bg: #f2f4f7;
+
+  --walmart-blue: #0071dc;
+  --walmart-dark-blue: #004f9a;
+  --walmart-spark: #ffc220;
+  --walmart-spark-hover: #e5ac18;
+  --walmart-light-blue: #e6f1fc;
+  --walmart-dark-text: #2e2f32;
+  --walmart-subtext: #46474a;
+  --walmart-border: #e3e8ee;
+  --walmart-bg: #f2f4f7;
+
+  --background: #ffffff;
+  --foreground: #2e2f32;
+  --card: #ffffff;
+  --card-foreground: #2e2f32;
+  --primary: #0071dc;
+  --primary-hover: #004f9a;
+  --primary-foreground: #ffffff;
+  --secondary: #f2f4f7;
+  --secondary-foreground: #2e2f32;
+  --muted: #64748b;
+  --border: #e3e8ee;
+  --accent: #ffc220;
+  --success: #108a00;
+  --danger: #d9381e;
+  --radius: 9999px; /* IBNK uses rounded pill buttons by default */
+}
+
+body {
+  background-color: #f2f4f7;
+  color: #2e2f32;
+  font-family: Bogle, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
