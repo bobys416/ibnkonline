@@ -56,9 +56,9 @@ export default function RegisterPage() {
           <input className="w-full rounded-xl border px-4 py-2.5 text-sm" placeholder="Mobile" value={phone} onChange={(e) => setPhone(e.target.value)} />
           <input className="w-full rounded-xl border px-4 py-2.5 text-sm" placeholder="Password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
           {error && <p className="text-sm text-rose-600">{error}</p>}
-          <button disabled={busy} className="w-full py-3 rounded-full bg-[#0071DC] text-white font-black">Create account</button>
+          <button disabled={busy} className="w-full py-3 rounded-full bg-[#FF7900] hover:bg-[#e06a00] text-white font-black shadow-md transition-all">Create account</button>
         </form>
-        <p className="text-xs text-slate-500">Already have an account? <Link href="/login" className="text-[#0071DC] font-bold">Sign in</Link></p>
+        <p className="text-xs text-slate-500">Already have an account? <Link href="/login" className="text-[#1554D1] font-bold">Sign in</Link></p>
       </div>
     </div>
   );

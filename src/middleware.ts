@@ -107,12 +107,13 @@ export function middleware(request: NextRequest) {
   // Content Security Policy
   const cspHeader = [
     "default-src 'self'",
-    "script-src 'self' 'unsafe-eval' 'unsafe-inline' https://checkout.razorpay.com",
+    "script-src 'self' 'unsafe-eval' 'unsafe-inline'",
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "img-src 'self' data: blob: https: http:",
     "font-src 'self' data: https://fonts.gstatic.com",
-    "connect-src 'self' https://api.razorpay.com https://lumberjack.razorpay.com",
-    "frame-src 'self' https://api.razorpay.com",
+    "connect-src 'self'",
+    "frame-src 'self'",
+    "form-action 'self' https://checkout.stripe.com",
   ].join("; ");
 
   response.headers.set("Content-Security-Policy", cspHeader);

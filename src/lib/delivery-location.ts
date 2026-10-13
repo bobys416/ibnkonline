@@ -37,7 +37,7 @@ function isDeliveryLocation(value: unknown): value is DeliveryLocation {
     typeof value.state === "string" &&
     "pinCode" in value &&
     typeof value.pinCode === "string" &&
-    /^[1-9]\d{5}$/.test(value.pinCode) &&
+    (value.pinCode === "" || /^[1-9]\d{5}$/.test(value.pinCode)) &&
     "displayName" in value &&
     typeof value.displayName === "string" &&
     "serviceability" in value &&

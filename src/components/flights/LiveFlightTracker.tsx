@@ -194,14 +194,14 @@ export function LiveFlightTracker() {
                   {/* Card Top: Airline + Flight No + Status */}
                   <div className="flex items-center justify-between gap-2 mb-3 pb-2.5 border-b border-slate-100">
                     <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-full bg-[#0071DC]/10 text-[#0071DC] flex items-center justify-center font-black text-xs font-mono">
+                      <div className="w-8 h-8 rounded-full bg-[#1554D1]/10 text-[#1554D1] flex items-center justify-center font-black text-xs font-mono">
                         {f.airline.iata || "FL"}
                       </div>
                       <div>
                         <h4 className="font-bold text-xs text-slate-900 line-clamp-1">
                           {f.airline.name}
                         </h4>
-                        <span className="text-[11px] font-mono font-black text-[#0071DC]">
+                        <span className="text-[11px] font-mono font-black text-[#1554D1]">
                           {f.flight.iata}
                         </span>
                       </div>
@@ -226,7 +226,7 @@ export function LiveFlightTracker() {
                       <span className="text-[11px] font-bold text-slate-600 block line-clamp-1" title={f.departure.airport}>
                         {f.departure.airport}
                       </span>
-                      <span className="text-xs font-mono font-bold text-[#0071DC] mt-0.5 block">
+                      <span className="text-xs font-mono font-bold text-[#1554D1] mt-0.5 block">
                         {formatTime(f.departure.scheduled)}
                       </span>
                     </div>
@@ -235,7 +235,7 @@ export function LiveFlightTracker() {
                     <div className="flex flex-col items-center justify-center px-1">
                       <div className="w-full flex items-center justify-center relative">
                         <div className="h-0.5 bg-slate-200 w-full" />
-                        <div className="absolute w-6 h-6 rounded-full bg-[#0071DC] text-white flex items-center justify-center shadow-xs">
+                        <div className="absolute w-6 h-6 rounded-full bg-[#1554D1] text-white flex items-center justify-center shadow-xs">
                           <Plane className="w-3 h-3 rotate-90" />
                         </div>
                       </div>
@@ -250,7 +250,7 @@ export function LiveFlightTracker() {
                       <span className="text-[11px] font-bold text-slate-600 block line-clamp-1" title={f.arrival.airport}>
                         {f.arrival.airport}
                       </span>
-                      <span className="text-xs font-mono font-bold text-[#0071DC] mt-0.5 block">
+                      <span className="text-xs font-mono font-bold text-[#1554D1] mt-0.5 block">
                         {formatTime(f.arrival.scheduled)}
                       </span>
                     </div>
@@ -271,7 +271,7 @@ export function LiveFlightTracker() {
                       </span>
                     )}
                   </div>
-                  <span className="text-[#0071DC] font-bold hover:underline cursor-pointer">
+                  <span className="text-[#1554D1] font-bold hover:underline cursor-pointer">
                     Flight Details →
                   </span>
                 </div>

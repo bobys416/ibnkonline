@@ -37,10 +37,12 @@ export type StoredOrder = {
   taxPaise: number;
   totalPaise: number;
   gatewayOrderId?: string;
+  gatewayCheckoutUrl?: string;
   gatewayPaymentId?: string;
 };
 
 const ORDERS_KEY = "buymecart.orders.v1";
+const PENDING_PAYMENT_ORDER_KEY = "buymecart.pending-payment-order.v1";
 
 export function readOrders(): StoredOrder[] {
   if (typeof window === "undefined") return [];
@@ -55,6 +57,44 @@ export function readOrders(): StoredOrder[] {
 export function saveOrder(order: StoredOrder) {
   const existing = readOrders();
   localStorage.setItem(ORDERS_KEY, JSON.stringify([order, ...existing]));
+}
+
+export function savePendingPaymentOrder(order: StoredOrder) {
+  sessionStorage.setItem(PENDING_PAYMENT_ORDER_KEY, JSON.stringify(order));
+}
+
+export function readPendingPaymentOrder(): StoredOrder | null {
+  const raw = sessionStorage.getItem(PENDING_PAYMENT_ORDER_KEY);
+  if (!raw) return null;
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    throw new Error("The saved checkout details are corrupted. Contact support before retrying.");
+  }
+
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    throw new Error("The saved checkout details are incomplete. Contact support before retrying.");
+  }
+
+  const order = parsed as Partial<StoredOrder>;
+  if (
+    typeof order.orderNumber !== "string" ||
+    order.paymentMethod !== "ONLINE" ||
+    order.paymentStatus !== "PENDING" ||
+    typeof order.gatewayOrderId !== "string" ||
+    !Number.isSafeInteger(order.totalPaise) ||
+    !Array.isArray(order.items)
+  ) {
+    throw new Error("The saved checkout details are incomplete. Contact support before retrying.");
+  }
+
+  return order as StoredOrder;
+}
+
+export function removePendingPaymentOrder() {
+  sessionStorage.removeItem(PENDING_PAYMENT_ORDER_KEY);
 }
 
 export function getOrder(orderNumber: string) {

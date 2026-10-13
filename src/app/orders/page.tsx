@@ -13,7 +13,7 @@ export default function OrdersPage() {
     <div className="max-w-3xl mx-auto px-4 py-8 space-y-4">
       <h1 className="text-3xl font-black">Your orders</h1>
       {orders.length === 0 ? (
-        <p className="text-sm text-slate-600">No orders yet. <Link href="/products" className="text-[#0071DC] font-bold">Shop now</Link></p>
+        <p className="text-sm text-slate-600">No orders yet. <Link href="/products" className="text-[#1554D1] font-bold hover:underline">Shop now</Link></p>
       ) : (
         orders.map((o) => (
           <Link key={o.orderNumber} href={`/orders/${o.orderNumber}`} className="block bg-white rounded-3xl border p-5">

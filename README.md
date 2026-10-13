@@ -12,7 +12,7 @@ Buymecart is a full-stack, enterprise-grade multi-category e-commerce and bankin
 - **Styling**: Tailwind CSS v4 & Lucide Icons
 - **Authentication**: JWT access tokens + httpOnly refresh token cookies with rotation
 - **Security**: Rate limiting, OWASP-compliant security headers (CSP, HSTS, X-Frame-Options), CORS
-- **Payments**: Razorpay sandbox integration with event-sourced payment auditing
+- **Payments**: Stripe-hosted Checkout with server-side session and payment verification
 - **Validation**: Zod schema validation
 - **Testing**: Jest unit tests + Playwright E2E suite
 
@@ -36,9 +36,10 @@ Key environment variables:
 DATABASE_URL="postgresql://postgres:password@localhost:5432/buymecart?schema=public"
 NEXTAUTH_SECRET="your-32-character-secret-key"
 JWT_ACCESS_TOKEN_EXPIRY="15m"
-RAZORPAY_KEY_ID="rzp_test_xxxxxxxxxxxx"
-RAZORPAY_KEY_SECRET="your_razorpay_secret"
+STRIPE_SECRET_KEY="sk_test_..."
 ```
+
+Keep `STRIPE_SECRET_KEY` in `.env.local` or your deployment's server-side secrets manager. Do not commit the key or expose it through a `NEXT_PUBLIC_` variable. Online checkout redirects to Stripe and verifies the completed session server-side; local order history remains in the browser.
 
 ### 3. Generate Prisma Client & Migrate
 ```bash

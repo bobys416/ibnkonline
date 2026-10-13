@@ -15,7 +15,7 @@ function CategoryContent() {
     return (
       <div className="max-w-xl mx-auto px-4 py-20 text-center">
         <h1 className="text-2xl font-black">Department not found</h1>
-        <Link href="/categories" className="text-[#0071DC] font-bold text-sm">Browse departments</Link>
+        <Link href="/categories" className="text-[#1554D1] font-bold text-sm">Browse departments</Link>
       </div>
     );
   }
@@ -23,7 +23,7 @@ function CategoryContent() {
   return (
     <div className="max-w-[1536px] mx-auto px-4 py-8 space-y-6">
       <div>
-        <p className="text-xs font-bold text-[#0071DC] uppercase">Department</p>
+        <p className="text-xs font-bold text-[#1554D1] uppercase">Department</p>
         <h1 className="text-3xl font-black">{category.name}</h1>
         <p className="text-sm text-slate-600">{category.tagline}</p>
       </div>

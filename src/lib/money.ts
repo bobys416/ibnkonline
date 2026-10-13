@@ -4,6 +4,9 @@
 // 1 INR = 100 paise
 // ============================================
 
+export const FREE_SHIPPING_THRESHOLD_PAISE = 49900;
+export const STANDARD_SHIPPING_PAISE = 4900;
+
 /**
  * Convert rupees to paise for storage
  */

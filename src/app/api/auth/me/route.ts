@@ -60,6 +60,9 @@ export async function GET(request: NextRequest) {
       permissions,
     });
   } catch (error) {
+    if ((error as { digest?: string })?.digest === "NEXT_PRERENDER_INTERRUPTED") {
+      throw error;
+    }
     console.error("GET /api/auth/me error:", error);
     return apiError("Internal server error", 500);
   }

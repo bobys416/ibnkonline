@@ -60,7 +60,7 @@ function firstAddress(data: unknown): GeoapifyAddress | undefined {
   }
 }
 
-function getServiceability(pinCode: string): "available" | "unavailable" | "unknown" {
+export function getServiceability(pinCode: string): "available" | "unavailable" | "unknown" {
   const configuredPins = process.env.SERVICEABLE_PIN_CODES?.split(",")
     .map((pin) => pin.trim())
     .filter(Boolean);
@@ -146,17 +146,13 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const resolvedPin = result.postcode ?? "";
-  if (!/^[1-9]\d{5}$/.test(resolvedPin)) {
-    return NextResponse.json(
-      { error: "No Indian 6-digit PIN code was found for that location." },
-      { status: 404 }
-    );
-  }
+  const resolvedPin = result.postcode && /^[1-9]\d{5}$/.test(result.postcode)
+    ? result.postcode
+    : "";
 
   let serviceability: "available" | "unavailable" | "unknown";
   try {
-    serviceability = getServiceability(resolvedPin);
+    serviceability = resolvedPin ? getServiceability(resolvedPin) : "unknown";
   } catch {
     return NextResponse.json(
       { error: "Delivery PIN-code coverage is configured incorrectly." },

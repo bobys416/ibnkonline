@@ -1,13 +1,22 @@
 "use client";
 
-import { useMemo, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { LocateFixed, LoaderCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCart } from "@/lib/cart";
 import { formatINR } from "@/lib/money";
-import { PaymentGateway } from "@/components/checkout/PaymentGateway";
-import { createOrderNumber, saveOrder, type CheckoutAddress, type PaymentMethodChoice } from "@/lib/orders";
+import {
+  createOrderNumber,
+  getOrder,
+  readPendingPaymentOrder,
+  removePendingPaymentOrder,
+  saveOrder,
+  savePendingPaymentOrder,
+  type CheckoutAddress,
+  type PaymentMethodChoice,
+  type StoredOrder,
+} from "@/lib/orders";
 import {
   checkDeliveryServiceability,
   getDeliveryLocationSnapshot,
@@ -61,17 +70,142 @@ function toCheckoutAddress(location: DeliveryLocation): CheckoutAddress {
   };
 }
 
+function getStripeCheckoutUrl(value?: string) {
+  if (!value) return "";
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && url.hostname === "checkout.stripe.com"
+      ? url.toString()
+      : "";
+  } catch {
+    return "";
+  }
+}
+
 export default function CheckoutPage() {
   const router = useRouter();
-  const { items, subtotalPaise, shippingPaise, taxPaise, totalPaise, clear } = useCart();
+  const {
+    items,
+    subtotalPaise,
+    shippingPaise,
+    taxPaise,
+    totalPaise,
+    clear,
+    isReady: cartIsReady,
+  } = useCart();
   const [method, setMethod] = useState<PaymentMethodChoice>("ONLINE");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [paymentReturnSessionId] = useState<string | null>(() =>
+    typeof window === "undefined"
+      ? null
+      : new URLSearchParams(window.location.search).get("session_id")
+  );
+  const [paymentWasCancelled] = useState(
+    () =>
+      typeof window !== "undefined" &&
+      new URLSearchParams(window.location.search).get("payment") === "cancelled"
+  );
+  const [paymentVerificationAttempt, setPaymentVerificationAttempt] = useState(0);
+  const [paymentReturnState, setPaymentReturnState] = useState<"idle" | "verifying" | "failed">("idle");
+  const [paymentRecoveryUrl, setPaymentRecoveryUrl] = useState("");
+  const verificationInFlight = useRef(false);
   const [locationFeedback, setLocationFeedback] = useState<LocationFeedback | null>(null);
   const [isLocating, setIsLocating] = useState(false);
   const [isCheckingPin, setIsCheckingPin] = useState(false);
-  const [gatewayOrderId, setGatewayOrderId] = useState("");
-  const [showPay, setShowPay] = useState(false);
+  useEffect(() => {
+    const query = new URLSearchParams(window.location.search);
+    if (query.get("payment") === "cancelled") {
+      try {
+        removePendingPaymentOrder();
+      } catch {
+        queueMicrotask(() => {
+          setError("Payment was cancelled. Your cart is unchanged, but the pending checkout could not be cleared.");
+        });
+      }
+      router.replace("/checkout");
+    }
+  }, [router]);
+
+  useEffect(() => {
+    if (!paymentReturnSessionId || !cartIsReady || verificationInFlight.current) return;
+    verificationInFlight.current = true;
+    setBusy(true);
+    setPaymentReturnState("verifying");
+    setError("");
+
+    async function verifyPayment() {
+      let recoveryUrl = "";
+      try {
+        const pendingOrder = readPendingPaymentOrder();
+        if (!pendingOrder || pendingOrder.gatewayOrderId !== paymentReturnSessionId) {
+          throw new Error("We could not find this pending checkout in this browser. Contact support before paying again.");
+        }
+        recoveryUrl = getStripeCheckoutUrl(pendingOrder.gatewayCheckoutUrl);
+
+        const existingOrder = getOrder(pendingOrder.orderNumber);
+        if (existingOrder?.paymentStatus === "SUCCESS") {
+          removePendingPaymentOrder();
+          clear();
+          router.replace(`/orders/${existingOrder.orderNumber}`);
+          return;
+        }
+
+        const response = await fetch(
+          `/api/v1/payments/verify?session_id=${encodeURIComponent(paymentReturnSessionId)}`,
+          { cache: "no-store" }
+        );
+        const result = (await response.json()) as {
+          success?: boolean;
+          error?: string;
+          data?: {
+            verified?: boolean;
+            orderNumber?: string | null;
+            amountPaise?: number | null;
+            gatewayPaymentId?: string | null;
+          };
+        };
+
+        if (!response.ok || !result.success) {
+          throw new Error(result.error || "Unable to verify the Stripe payment.");
+        }
+        if (
+          result.data?.verified !== true ||
+          result.data.orderNumber !== pendingOrder.orderNumber ||
+          result.data.amountPaise !== pendingOrder.totalPaise ||
+          !result.data.gatewayPaymentId
+        ) {
+          throw new Error("Stripe has not confirmed this payment yet. Retry verification before placing another order.");
+        }
+
+        const confirmedOrder: StoredOrder = {
+          ...pendingOrder,
+          status: "PLACED",
+          paymentStatus: "SUCCESS",
+          gatewayCheckoutUrl: undefined,
+          gatewayPaymentId: result.data.gatewayPaymentId,
+        };
+        saveOrder(confirmedOrder);
+        removePendingPaymentOrder();
+        clear();
+        router.replace(`/orders/${confirmedOrder.orderNumber}`);
+      } catch (verificationError) {
+        setPaymentRecoveryUrl(recoveryUrl);
+        setPaymentReturnState("failed");
+        setError(
+          verificationError instanceof Error
+            ? verificationError.message
+            : "Unable to verify the Stripe payment. Retry before placing another order."
+        );
+      } finally {
+        verificationInFlight.current = false;
+        setBusy(false);
+      }
+    }
+
+    void verifyPayment();
+  }, [paymentReturnSessionId, cartIsReady, paymentVerificationAttempt, clear, router]);
+
   const locationSnapshot = useSyncExternalStore(
     subscribeToDeliveryLocation,
     getDeliveryLocationSnapshot,
@@ -97,7 +231,7 @@ export default function CheckoutPage() {
   const [isAddressDirty, setIsAddressDirty] = useState(false);
   const savedAddressFingerprint = isAddressDirty
     ? null
-    : savedLocation?.serviceability === "available"
+    : savedLocation && savedLocation.serviceability !== "unavailable"
       ? addressFingerprint(toCheckoutAddress(savedLocation))
       : null;
 
@@ -111,21 +245,23 @@ export default function CheckoutPage() {
   }
 
   function describeServiceability(location: DeliveryLocation): LocationFeedback {
-    if (location.serviceability === "available") {
-      return {
-        kind: "success",
-        message: `Delivery is available to ${location.pinCode}. Review the address fields before saving.`,
-      };
-    }
     if (location.serviceability === "unavailable") {
       return {
         kind: "error",
         message: `Delivery is not available to PIN code ${location.pinCode}. Try another address or PIN code.`,
       };
     }
+    if (location.serviceability === "unknown") {
+      return {
+        kind: "info",
+        message: location.pinCode
+          ? `Address found for PIN code ${location.pinCode}. Delivery availability has not been confirmed.`
+          : "Address details found. Add a valid PIN code to check delivery availability.",
+      };
+    }
     return {
-      kind: "info",
-      message: "We found this location, but delivery coverage is not configured for verification.",
+      kind: "success",
+      message: `Delivery is available to ${location.pinCode}. Review the address fields before saving.`,
     };
   }
 
@@ -190,6 +326,13 @@ export default function CheckoutPage() {
   }
 
   function detectMyLocation() {
+    if (!window.isSecureContext) {
+      setLocationFeedback({
+        kind: "error",
+        message: "Device location requires a secure connection. Use http://localhost:3000 on this device or open the site over HTTPS. You can enter your address and PIN code manually.",
+      });
+      return;
+    }
     if (!navigator.geolocation) {
       setLocationFeedback({
         kind: "error",
@@ -249,7 +392,7 @@ export default function CheckoutPage() {
       });
       return;
     }
-    if (verifiedLocation.serviceability !== "available") {
+    if (verifiedLocation.serviceability === "unavailable") {
       setLocationFeedback(describeServiceability(verifiedLocation));
       return;
     }
@@ -257,13 +400,12 @@ export default function CheckoutPage() {
       !address.fullName.trim() ||
       !/^[6-9]\d{9}$/.test(address.phone) ||
       !address.addressLine1.trim() ||
-      !address.landmark?.trim() ||
       !address.city.trim() ||
       !address.state.trim()
     ) {
       setLocationFeedback({
         kind: "error",
-        message: "Enter your name, valid mobile number, house/building, locality, city, and state.",
+        message: "Enter your name, valid 10-digit mobile number, house/building, city, and state.",
       });
       return;
     }
@@ -272,7 +414,7 @@ export default function CheckoutPage() {
       ...verifiedLocation,
       addressLine1: address.addressLine1.trim(),
       addressLine2: address.addressLine2?.trim() ?? "",
-      landmark: address.landmark.trim(),
+      landmark: address.landmark?.trim() ?? "",
       city: address.city.trim(),
       state: address.state.trim(),
       pinCode: address.pinCode,
@@ -295,18 +437,20 @@ export default function CheckoutPage() {
     }
   }
 
-  function persistOrder(opts: {
+  function buildOrder(opts: {
     paymentMethod: PaymentMethodChoice;
     paymentStatus: "PENDING" | "SUCCESS";
     paymentMethodDetail?: string;
     gatewayOrderId?: string;
     gatewayPaymentId?: string;
+    gatewayCheckoutUrl?: string;
+    orderNumber?: string;
   }) {
-    const orderNumber = createOrderNumber();
-    saveOrder({
+    const orderNumber = opts.orderNumber ?? createOrderNumber();
+    return {
       orderNumber,
       createdAt: new Date().toISOString(),
-      status: opts.paymentStatus === "SUCCESS" || opts.paymentMethod === "COD" ? "PLACED" : "PLACED",
+      status: "PLACED" as const,
       paymentMethod: opts.paymentMethod,
       paymentStatus: opts.paymentMethod === "COD" ? "PENDING" : opts.paymentStatus,
       paymentMethodDetail: opts.paymentMethodDetail,
@@ -327,10 +471,22 @@ export default function CheckoutPage() {
       taxPaise,
       totalPaise,
       gatewayOrderId: opts.gatewayOrderId,
+      gatewayCheckoutUrl: opts.gatewayCheckoutUrl,
       gatewayPaymentId: opts.gatewayPaymentId,
-    });
+    } satisfies StoredOrder;
+  }
+
+  function persistOrder(opts: {
+    paymentMethod: PaymentMethodChoice;
+    paymentStatus: "PENDING" | "SUCCESS";
+    paymentMethodDetail?: string;
+    gatewayOrderId?: string;
+    gatewayPaymentId?: string;
+  }) {
+    const order = buildOrder(opts);
+    saveOrder(order);
     clear();
-    router.push(`/orders/${orderNumber}`);
+    router.push(`/orders/${order.orderNumber}`);
   }
 
   async function placeOrder() {
@@ -340,18 +496,22 @@ export default function CheckoutPage() {
       !/^[6-9]\d{9}$/.test(address.phone) ||
       !/^[1-9]\d{5}$/.test(address.pinCode) ||
       !address.addressLine1.trim() ||
-      !address.landmark?.trim() ||
       !address.city.trim() ||
       !address.state.trim()
     ) {
       setError("Complete the required delivery address fields with a valid mobile number and PIN code.");
       return;
     }
-    if (
-      verifiedLocation?.serviceability !== "available" ||
-      verifiedLocation.pinCode !== address.pinCode
-    ) {
-      setError("Check delivery eligibility for this PIN code before placing your order.");
+    if (verifiedLocation?.serviceability === "unavailable") {
+      setError("Delivery is not available to this PIN code. Please use an address with confirmed delivery coverage.");
+      return;
+    }
+    if (!verifiedLocation || verifiedLocation.pinCode !== address.pinCode) {
+      setError("Check the PIN code before placing your order.");
+      return;
+    }
+    if (verifiedLocation?.serviceability === "unknown") {
+      setError("Delivery availability has not been confirmed for this PIN code. Your address is saved, but an order cannot be placed until delivery coverage is configured and verified.");
       return;
     }
     if (savedAddressFingerprint !== addressFingerprint(address)) {
@@ -372,30 +532,65 @@ export default function CheckoutPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          amountPaise: totalPaise,
-          receipt: createOrderNumber().slice(0, 40),
-          notes: { city: address.city, pin: address.pinCode },
+          items: items.map(({ productId, variantId, quantity }) => ({
+            productId,
+            variantId,
+            quantity,
+          })),
         }),
       });
-      const json = await res.json();
+      const json = (await res.json()) as {
+        success?: boolean;
+        error?: string;
+        data?: {
+          sessionId?: string;
+          url?: string;
+          orderNumber?: string;
+          amountPaise?: number;
+        };
+      };
       if (!res.ok || !json.success) {
         setError(json.error || "Could not start payment");
         return;
       }
-      setGatewayOrderId(json.data.gatewayOrderId);
-      setShowPay(true);
-    } catch {
-      setError("Payment service unavailable");
+      if (
+        !json.data?.sessionId ||
+        !json.data.url ||
+        !json.data.orderNumber ||
+        json.data.amountPaise !== totalPaise
+      ) {
+        setError("Stripe returned incomplete checkout details. Please try again.");
+        return;
+      }
+
+      const orderNumber = json.data.orderNumber;
+      savePendingPaymentOrder(
+        buildOrder({
+          paymentMethod: "ONLINE",
+          paymentStatus: "PENDING",
+          paymentMethodDetail: "Stripe Checkout",
+          gatewayOrderId: json.data.sessionId,
+          gatewayCheckoutUrl: json.data.url,
+          orderNumber,
+        })
+      );
+      window.location.assign(json.data.url);
+    } catch (checkoutError) {
+      setError(
+        checkoutError instanceof Error
+          ? checkoutError.message
+          : "Payment service unavailable. Please try again."
+      );
     } finally {
       setBusy(false);
     }
   }
 
-  if (items.length === 0 && !showPay) {
+  if (items.length === 0 && cartIsReady && !paymentReturnSessionId) {
     return (
       <div className="max-w-lg mx-auto px-4 py-20 text-center space-y-3">
         <h1 className="text-3xl font-black">Nothing to checkout</h1>
-        <Link href="/products" className="text-[#0071DC] font-bold">Add products first</Link>
+        <Link href="/products" className="font-bold text-[#1554D1]">Add products first</Link>
       </div>
     );
   }
@@ -416,7 +611,7 @@ export default function CheckoutPage() {
             type="button"
             onClick={detectMyLocation}
             disabled={isLocating || isCheckingPin}
-            className="flex w-full items-center justify-center gap-2 rounded-xl border border-[#0071DC] px-4 py-3 text-sm font-bold text-[#0071DC] transition-colors hover:bg-[#E6F1FC] disabled:cursor-wait disabled:opacity-60"
+            className="flex w-full items-center justify-center gap-2 rounded-xl border border-[#1554D1] px-4 py-3 text-sm font-bold text-[#1554D1] transition-colors hover:bg-[#eaf0ff] disabled:cursor-wait disabled:opacity-60"
           >
             {isLocating ? (
               <LoaderCircle className="h-4 w-4 animate-spin" />
@@ -477,7 +672,7 @@ export default function CheckoutPage() {
               placeholder="State"
               autoComplete="address-level1"
             />
-            <label className="flex gap-2 sm:col-span-2">
+            <div className="flex gap-2 sm:col-span-2">
               <input
                 className="min-w-0 flex-1 rounded-xl border px-3 py-2 text-sm"
                 value={address.pinCode}
@@ -491,11 +686,11 @@ export default function CheckoutPage() {
                 type="button"
                 onClick={checkPinCode}
                 disabled={isCheckingPin || isLocating}
-                className="shrink-0 rounded-xl bg-[#0071DC] px-4 py-2 text-sm font-bold text-white hover:bg-[#004f9a] disabled:cursor-wait disabled:opacity-60"
+                className="shrink-0 rounded-xl bg-[#1554D1] px-4 py-2 text-sm font-bold text-white hover:bg-[#1044ad] disabled:cursor-wait disabled:opacity-60"
               >
                 {isCheckingPin ? "Checking…" : "Check PIN"}
               </button>
-            </label>
+            </div>
           </div>
 
           {locationFeedback && (
@@ -508,7 +703,7 @@ export default function CheckoutPage() {
                   : locationFeedback.kind === "error"
                     ? "bg-rose-50 text-rose-700"
                     : locationFeedback.kind === "loading"
-                      ? "bg-blue-50 text-blue-800"
+                      ? "bg-[#eaf0ff] text-[#172033]"
                       : "bg-amber-50 text-amber-800"
               }`}
             >
@@ -527,39 +722,90 @@ export default function CheckoutPage() {
           <button
             type="button"
             onClick={saveConfirmedAddress}
-            disabled={verifiedLocation?.serviceability !== "available"}
-            className="w-full rounded-xl bg-[#131921] px-4 py-3 text-sm font-bold text-white transition-colors hover:bg-[#232f3e] disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={!verifiedLocation || verifiedLocation.serviceability === "unavailable"}
+            className="w-full rounded-xl bg-[#172033] px-4 py-3 text-sm font-bold text-white transition-colors hover:bg-[#28344b] disabled:cursor-not-allowed disabled:opacity-50"
           >
             {savedAddressFingerprint === addressFingerprint(address)
               ? "Delivery address saved"
               : "Save confirmed delivery address"}
           </button>
-          {verifiedLocation?.serviceability !== "available" && (
+          {(!verifiedLocation || verifiedLocation.serviceability === "unavailable") && (
             <p className="text-xs text-slate-500">
-              Save is enabled only after a successful delivery-coverage check.
+              Check the PIN code before saving. A valid address can be saved even when delivery coverage is not configured.
             </p>
           )}
         </section>
         <div className="bg-white rounded-3xl border p-6 space-y-3">
           <h2 className="font-black">Payment</h2>
-          <label className={`flex items-start gap-3 rounded-2xl border p-4 ${method === "ONLINE" ? "border-[#0071DC] bg-[#E6F1FC]" : ""}`}>
-            <input type="radio" checked={method === "ONLINE"} onChange={() => setMethod("ONLINE")} />
+          <label className={`flex items-start gap-3 rounded-2xl border p-4 transition-all ${method === "ONLINE" ? "border-[#1554D1] bg-blue-50/60 ring-1 ring-[#1554D1]" : "border-slate-200"}`}>
+            <input
+              type="radio"
+              checked={method === "ONLINE"}
+              onChange={() => setMethod("ONLINE")}
+              disabled={busy || Boolean(paymentReturnSessionId)}
+              className="accent-[#1554D1] mt-0.5"
+            />
             <div>
-              <p className="font-bold text-sm">UPI / Cards / Netbanking / Wallets</p>
-              <p className="text-xs text-slate-500">Razorpay-ready sandbox. Test UPI success@upi</p>
+              <p className="font-bold text-sm text-[#172033]">Secure online payment with Stripe</p>
+              <p className="text-xs text-slate-500">Credit / Debit cards & digital instruments. Redirects to Stripe Checkout.</p>
             </div>
           </label>
-          <label className={`flex items-start gap-3 rounded-2xl border p-4 ${method === "COD" ? "border-[#0071DC] bg-[#E6F1FC]" : ""}`}>
-            <input type="radio" checked={method === "COD"} onChange={() => setMethod("COD")} />
+          <label className={`flex items-start gap-3 rounded-2xl border p-4 transition-all ${method === "COD" ? "border-[#1554D1] bg-blue-50/60 ring-1 ring-[#1554D1]" : "border-slate-200"}`}>
+            <input
+              type="radio"
+              checked={method === "COD"}
+              onChange={() => setMethod("COD")}
+              disabled={busy || Boolean(paymentReturnSessionId)}
+              className="accent-[#1554D1] mt-0.5"
+            />
             <div>
-              <p className="font-bold text-sm">Cash on Delivery</p>
-              <p className="text-xs text-slate-500">Pay the courier in cash or UPI at the door</p>
+              <p className="font-bold text-sm text-[#172033]">Cash on Delivery (COD)</p>
+              <p className="text-xs text-slate-500">Pay the courier executive in cash or via doorstep UPI</p>
             </div>
           </label>
         </div>
-        {error && <p className="text-sm text-rose-600 font-semibold">{error}</p>}
-        <button onClick={placeOrder} disabled={busy} className="w-full py-3 rounded-full bg-[#0071DC] text-white font-black">
-          {method === "COD" ? "Place COD order" : "Pay securely"}
+        {paymentReturnState === "verifying" && (
+          <p role="status" className="text-sm font-semibold text-slate-600">
+            Verifying your Stripe payment…
+          </p>
+        )}
+        {cartIsReady && paymentWasCancelled && !paymentReturnSessionId && (
+          <p role="status" className="text-sm font-semibold text-amber-700">
+            Payment was cancelled. Your cart is unchanged; you can try again.
+          </p>
+        )}
+        {error && <p role="alert" className="text-sm text-rose-600 font-semibold">{error}</p>}
+        {paymentReturnState === "failed" && paymentReturnSessionId && (
+          <div className="flex flex-wrap gap-4">
+            <button
+              type="button"
+              onClick={() => setPaymentVerificationAttempt((attempt) => attempt + 1)}
+              disabled={busy}
+              className="text-sm font-bold text-[#1554D1] underline disabled:opacity-50"
+            >
+              Retry payment confirmation
+            </button>
+            {paymentRecoveryUrl && (
+              <button
+                type="button"
+                onClick={() => window.location.assign(paymentRecoveryUrl)}
+                className="text-sm font-bold text-[#1554D1] underline"
+              >
+                Return to Stripe Checkout
+              </button>
+            )}
+          </div>
+        )}
+        <button
+          onClick={placeOrder}
+          disabled={busy || !cartIsReady || items.length === 0 || Boolean(paymentReturnSessionId)}
+          className="w-full py-3.5 rounded-full bg-[#FF7900] hover:bg-[#E06A00] text-white font-black text-sm tracking-wide shadow-sm transition-all disabled:opacity-60 active:scale-98"
+        >
+          {busy
+            ? "Please wait…"
+            : method === "COD"
+              ? "Place COD Order"
+              : "Continue to Secure Checkout"}
         </button>
       </div>
       <aside className="lg:col-span-5">
@@ -576,22 +822,6 @@ export default function CheckoutPage() {
           <div className="flex justify-between font-black text-lg"><span>Total</span><span>{formatINR(totalPaise)}</span></div>
         </div>
       </aside>
-      {showPay && (
-        <PaymentGateway
-          amountPaise={totalPaise}
-          gatewayOrderId={gatewayOrderId}
-          onClose={() => setShowPay(false)}
-          onSuccess={(result) =>
-            persistOrder({
-              paymentMethod: "ONLINE",
-              paymentStatus: "SUCCESS",
-              paymentMethodDetail: result.method,
-              gatewayOrderId,
-              gatewayPaymentId: result.gatewayPaymentId,
-            })
-          }
-        />
-      )}
     </div>
   );
 }

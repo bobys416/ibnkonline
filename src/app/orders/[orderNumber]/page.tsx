@@ -19,7 +19,7 @@ function OrderDetailContent() {
     return (
       <div className="max-w-lg mx-auto px-4 py-20 text-center">
         <h1 className="text-2xl font-black">Order not found</h1>
-        <Link href="/orders" className="text-[#0071DC] font-bold text-sm">View orders</Link>
+        <Link href="/orders" className="text-[#1554D1] font-bold text-sm hover:underline">View orders</Link>
       </div>
     );
   }
@@ -61,7 +61,7 @@ function OrderDetailContent() {
             .join(", ")}
         </p>
       </div>
-      <Link href="/products" className="block text-center py-3 rounded-full bg-[#0071DC] text-white font-black">
+      <Link href="/products" className="block text-center py-3 rounded-full bg-[#FF7900] hover:bg-[#e06a00] text-white font-black shadow-md transition-all">
         Continue shopping
       </Link>
     </div>

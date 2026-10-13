@@ -340,9 +340,9 @@ async function main() {
       value: true,
     },
     {
-      key: "payment.razorpay_enabled",
+      key: "payment.stripe_enabled",
       group: "payment",
-      label: "Enable Razorpay Payments",
+      label: "Enable Stripe Payments",
       value: true,
     },
   ];

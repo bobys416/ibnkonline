@@ -401,7 +401,7 @@ export function MeeshoStyleSection() {
             </Link>
             <Link
               href="/resell"
-              className="px-6 py-3 rounded-full bg-[#FFC220] text-slate-950 font-black text-xs hover:bg-[#e5ac18] transition-colors shadow-sm"
+              className="px-6 py-3 rounded-full bg-[#FF7900] text-white font-black text-xs hover:bg-[#e06a00] transition-colors shadow-sm"
             >
               Resell & Earn
             </Link>

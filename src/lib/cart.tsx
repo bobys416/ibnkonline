@@ -2,10 +2,11 @@
 
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { getProductById, getVariant, type CatalogProduct, type ProductVariant } from "@/lib/catalog";
+import { FREE_SHIPPING_THRESHOLD_PAISE, STANDARD_SHIPPING_PAISE } from "@/lib/money";
+
+export { FREE_SHIPPING_THRESHOLD_PAISE, STANDARD_SHIPPING_PAISE } from "@/lib/money";
 
 const CART_KEY = "buymecart.cart.v1";
-export const FREE_SHIPPING_THRESHOLD_PAISE = 49900;
-export const STANDARD_SHIPPING_PAISE = 4900;
 
 export type CartLine = {
   productId: string;
@@ -25,6 +26,7 @@ type CartContextValue = {
   lines: CartLine[];
   items: HydratedCartLine[];
   itemCount: number;
+  isReady: boolean;
   subtotalPaise: number;
   shippingPaise: number;
   taxPaise: number;
@@ -62,13 +64,22 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(CART_KEY);
-      if (raw) setLines(JSON.parse(raw) as CartLine[]);
-    } catch {
-      setLines([]);
-    }
-    setReady(true);
+    let cancelled = false;
+    queueMicrotask(() => {
+      let storedLines: CartLine[] = [];
+      try {
+        const raw = localStorage.getItem(CART_KEY);
+        if (raw) storedLines = JSON.parse(raw) as CartLine[];
+      } catch {
+        storedLines = [];
+      }
+      if (cancelled) return;
+      setLines(storedLines);
+      setReady(true);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -118,6 +129,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       lines,
       items,
       itemCount: items.reduce((sum, l) => sum + l.quantity, 0),
+      isReady: ready,
       subtotalPaise,
       shippingPaise,
       taxPaise,
@@ -127,7 +139,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       removeItem,
       clear,
     };
-  }, [lines, addItem, setQuantity, removeItem, clear]);
+  }, [lines, addItem, setQuantity, removeItem, clear, ready]);
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
 }

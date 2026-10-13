@@ -1,34 +1,22 @@
 import { NextRequest } from "next/server";
-import { z } from "zod";
-import { apiError, apiSuccess, validateBody } from "@/lib/api-utils";
-import { signPayload, verifySignature } from "@/lib/payment/gateway";
+import { apiError, apiSuccess } from "@/lib/api-utils";
+import { retrieveStripeCheckoutSession } from "@/lib/payment/stripe";
 
-const schema = z.object({
-  gatewayOrderId: z.string().min(4),
-  gatewayPaymentId: z.string().min(4),
-  signature: z.string().min(8),
-});
-
-export async function POST(request: NextRequest) {
-  const body = await request.json().catch(() => null);
-  if (!body) return apiError("Invalid request body", 400);
-  const validation = validateBody(schema, body);
-  if (!validation.success) return validation.response;
-
-  const ok = verifySignature(
-    validation.data.gatewayOrderId,
-    validation.data.gatewayPaymentId,
-    validation.data.signature
-  );
-
-  if (!ok) {
-    return apiError("Payment signature verification failed", 400);
+export async function GET(request: NextRequest) {
+  const sessionId = request.nextUrl.searchParams.get("session_id");
+  if (!sessionId || !/^cs_(test|live)_[A-Za-z0-9_]+$/.test(sessionId)) {
+    return apiError("A valid Stripe Checkout Session ID is required.", 400);
+  }
+  if (!process.env.STRIPE_SECRET_KEY) {
+    return apiError("Stripe is not configured. Add STRIPE_SECRET_KEY to the server environment.", 503);
   }
 
-  return apiSuccess({
-    verified: true,
-    gatewayOrderId: validation.data.gatewayOrderId,
-    gatewayPaymentId: validation.data.gatewayPaymentId,
-    expectedDemoSignature: signPayload(`${validation.data.gatewayOrderId}|${validation.data.gatewayPaymentId}`),
-  });
+  try {
+    return apiSuccess(await retrieveStripeCheckoutSession(sessionId));
+  } catch (error) {
+    return apiError(
+      error instanceof Error ? error.message : "Unable to verify the Stripe payment.",
+      502
+    );
+  }
 }

@@ -17,7 +17,7 @@ export default function CategoriesPage() {
             <div className="p-5">
               <h2 className="font-black text-lg">{cat.name}</h2>
               <p className="text-sm text-slate-600">{cat.tagline}</p>
-              <p className="text-xs font-bold text-[#0071DC] mt-2">{getProductsByCategory(cat.slug).length} products</p>
+              <p className="text-xs font-bold text-[#1554D1] mt-2">{getProductsByCategory(cat.slug).length} products</p>
             </div>
           </Link>
         ))}

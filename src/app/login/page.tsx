@@ -46,12 +46,12 @@ export default function LoginPage() {
           <input className="w-full rounded-xl border px-4 py-2.5 text-sm" value={email} onChange={(e) => setEmail(e.target.value)} type="email" required />
           <input className="w-full rounded-xl border px-4 py-2.5 text-sm" value={password} onChange={(e) => setPassword(e.target.value)} type="password" required />
           {error && <p className="text-sm text-rose-600">{error}</p>}
-          <button disabled={busy} className="w-full py-3 rounded-full bg-[#0071DC] text-white font-black">
+          <button disabled={busy} className="w-full py-3 rounded-full bg-[#FF7900] hover:bg-[#e06a00] text-white font-black shadow-md transition-all">
             {busy ? "Signing in…" : "Sign in"}
           </button>
         </form>
         <p className="text-xs text-slate-500">
-          New here? <Link href="/register" className="text-[#0071DC] font-bold">Create an account</Link>
+          New here? <Link href="/register" className="text-[#1554D1] font-bold">Create an account</Link>
         </p>
       </div>
     </div>
