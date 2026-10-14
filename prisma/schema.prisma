@@ -298,6 +298,9 @@ model Product {
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
+  merchantId       String?
+  merchant         Merchant? @relation(fields: [merchantId], references: [id])
+
   // Relations
   category         Category @relation(fields: [categoryId], references: [id])
   brand            Brand?   @relation(fields: [brandId], references: [id])
@@ -307,9 +310,11 @@ model Product {
   approvalHistory  ProductApprovalHistory[]
   wishlistItems    WishlistItem[]
   specifications   ProductSpecification[]
+  changeRequests   ProductChangeRequest[]
 
   @@index([categoryId])
   @@index([brandId])
+  @@index([merchantId])
   @@index([status])
   @@index([slug])
   @@index([sku])
@@ -325,8 +330,12 @@ enum ProductStatus {
   DRAFT
   SUBMITTED
   UNDER_REVIEW
+  PENDING_REVIEW
+  CHANGES_REQUESTED
   APPROVED
   PUBLISHED
+  UNLISTING_REQUESTED
+  UNLISTED
   REJECTED
   ARCHIVED
 }
@@ -1117,3 +1126,363 @@ model Banner {
   @@index([position, isActive])
   @@map("banners")
 }
+
+// ============================================
+// MARKETPLACE MERCHANTS & ONBOARDING
+// ============================================
+
+model Merchant {
+  id                    String              @id @default(cuid())
+  businessName          String
+  legalName             String?
+  contactPerson         String
+  email                 String              @unique
+  phone                 String              @unique
+  businessAddress       String
+  city                  String
+  district              String?
+  state                 String
+  pinCode               String
+  gstNumber             String?
+  panNumber             String?
+  businessCategory      String?
+  bankAccountNumber     String?
+  bankIfsc              String?
+  bankName              String?
+  bankBeneficiaryName   String?
+  commissionRatePercent Float               @default(5.0)
+  status                MerchantStatus      @default(UNDER_REVIEW)
+  rejectionReason       String?
+  operationalNotes      String?
+  
+  distributorId         String?
+  areaDistributorId     String?
+  
+  approvedAt            DateTime?
+  approvedBy            String?
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+
+  distributor           Distributor?        @relation(fields: [distributorId], references: [id])
+  areaDistributor       AreaDistributor?    @relation(fields: [areaDistributorId], references: [id])
+  products              Product[]
+  documents             MerchantDocument[]
+  statusHistory         MerchantStatusHistory[]
+  commissions           Commission[]
+  settlements           Settlement[]
+
+  @@index([status])
+  @@index([distributorId])
+  @@index([areaDistributorId])
+  @@index([pinCode])
+  @@map("merchants")
+}
+
+enum MerchantStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  APPROVED
+  REJECTED
+  SUSPENDED
+}
+
+model MerchantApplication {
+  id                    String              @id @default(cuid())
+  applicationNumber     String              @unique // APP-YYYYMMDD-XXXX
+  businessName          String
+  legalName             String?
+  contactPerson         String
+  email                 String
+  phone                 String
+  businessAddress       String
+  city                  String
+  district              String?
+  state                 String
+  pinCode               String
+  businessCategory      String
+  gstNumber             String?
+  panNumber             String?
+  bankAccountNumber     String?
+  bankIfsc              String?
+  bankName              String?
+  bankBeneficiaryName   String?
+  storeDetails          String?
+  requestedCategories   String[]
+  status                MerchantAppStatus   @default(SUBMITTED)
+  operationalNotes      String?
+  reviewComments        String?
+  rejectionReason       String?
+  submittedBy           String?             // Operator who keyed the intake
+  reviewedBy            String?             // Master Admin reviewer
+  reviewedAt            DateTime?
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+
+  documents             MerchantDocument[]
+
+  @@index([status])
+  @@index([email])
+  @@index([pinCode])
+  @@map("merchant_applications")
+}
+
+enum MerchantAppStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  DOCUMENTS_REQUIRED
+  APPROVED
+  REJECTED
+  SUSPENDED
+}
+
+model MerchantDocument {
+  id                    String              @id @default(cuid())
+  merchantId            String?
+  applicationId         String?
+  documentType          String              // GST, PAN, CHEQUE, FSSAI, ID_PROOF
+  documentUrl           String
+  fileName              String?
+  status                String              @default("PENDING") // PENDING, VERIFIED, REJECTED
+  verifiedBy            String?
+  verifiedAt            DateTime?
+  createdAt             DateTime            @default(now())
+
+  merchant              Merchant?           @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  application           MerchantApplication? @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  @@index([merchantId])
+  @@index([applicationId])
+  @@map("merchant_documents")
+}
+
+model MerchantStatusHistory {
+  id                    String              @id @default(cuid())
+  merchantId            String
+  fromStatus            MerchantStatus
+  toStatus              MerchantStatus
+  reason                String?
+  performedBy           String
+  createdAt             DateTime            @default(now())
+
+  merchant              Merchant            @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+
+  @@index([merchantId])
+  @@map("merchant_status_history")
+}
+
+// ============================================
+// DISTRIBUTION HIERARCHY
+// ============================================
+
+model Distributor {
+  id                    String              @id @default(cuid())
+  distributorCode       String              @unique // DIST-XXXX
+  businessName          String
+  contactPerson         String
+  email                 String              @unique
+  phone                 String              @unique
+  registeredAddress     String
+  state                 String
+  district              String?
+  pinCode               String
+  operationalTerritory  String
+  territoryPinCodes     String[]
+  commissionRatePercent Float               @default(2.5)
+  status                DistributorStatus   @default(ACTIVE)
+  approvedBy            String?
+  approvedAt            DateTime?
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+
+  areaDistributors      AreaDistributor[]
+  merchants             Merchant[]
+  commissions           Commission[]
+  settlements           Settlement[]
+
+  @@index([status])
+  @@index([distributorCode])
+  @@map("distributors")
+}
+
+model AreaDistributor {
+  id                    String              @id @default(cuid())
+  code                  String              @unique // ADIST-XXXX
+  businessName          String
+  contactPerson         String
+  email                 String              @unique
+  phone                 String              @unique
+  address               String
+  state                 String
+  district              String?
+  pinCode               String
+  territoryPinCodes     String[]
+  distributorId         String
+  commissionRatePercent Float               @default(1.5)
+  status                DistributorStatus   @default(ACTIVE)
+  approvedBy            String?
+  approvedAt            DateTime?
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+
+  distributor           Distributor         @relation(fields: [distributorId], references: [id])
+  merchants             Merchant[]
+  commissions           Commission[]
+  settlements           Settlement[]
+
+  @@index([distributorId])
+  @@index([status])
+  @@map("area_distributors")
+}
+
+enum DistributorStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+  INACTIVE
+}
+
+// ============================================
+// APPROVAL WORKFLOWS & CHANGE REQUESTS
+// ============================================
+
+model ApprovalRequest {
+  id                    String              @id @default(cuid())
+  requestNumber         String              @unique // AR-YYYYMMDD-XXXX
+  type                  ApprovalRequestType
+  status                ApprovalRequestStatus @default(PENDING)
+  entityType            String              // Product, MerchantApplication, Distributor, Refund
+  entityId              String
+  title                 String
+  proposedData          Json
+  previousData          Json?
+  submittedBy           String
+  reviewedBy            String?
+  reviewedAt            DateTime?
+  decisionReason        String?
+  comments              String?
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+
+  @@index([type, status])
+  @@index([entityId])
+  @@index([submittedBy])
+  @@map("approval_requests")
+}
+
+enum ApprovalRequestType {
+  PRODUCT_CREATION
+  PRODUCT_UPDATE
+  PRODUCT_UNLIST
+  MERCHANT_ONBOARDING
+  MERCHANT_STATUS_CHANGE
+  DISTRIBUTOR_ONBOARDING
+  REFUND_DUAL_CONTROL
+  ROLE_GRANT
+}
+
+enum ApprovalRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CHANGES_REQUESTED
+}
+
+model ProductChangeRequest {
+  id                    String              @id @default(cuid())
+  productId             String
+  proposedData          Json
+  previousData          Json?
+  changeSummary         String?
+  submittedBy           String
+  status                ApprovalRequestStatus @default(PENDING)
+  decisionReason        String?
+  reviewedBy            String?
+  reviewedAt            DateTime?
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+
+  product               Product             @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@index([productId])
+  @@index([status])
+  @@map("product_change_requests")
+}
+
+// ============================================
+// FINANCIAL LEDGER, COMMISSIONS & SETTLEMENTS
+// ============================================
+
+model Commission {
+  id                    String              @id @default(cuid())
+  orderId               String
+  orderNumber           String
+  merchantId            String?
+  distributorId         String?
+  areaDistributorId     String?
+  orderAmountPaise      Int
+  commissionRatePercent Float
+  commissionPaise       Int
+  netPayablePaise       Int
+  status                CommissionStatus    @default(CALCULATED)
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+
+  merchant              Merchant?           @relation(fields: [merchantId], references: [id])
+  distributor           Distributor?        @relation(fields: [distributorId], references: [id])
+  areaDistributor       AreaDistributor?    @relation(fields: [areaDistributorId], references: [id])
+
+  @@index([orderId])
+  @@index([merchantId])
+  @@index([distributorId])
+  @@index([areaDistributorId])
+  @@index([status])
+  @@map("commissions")
+}
+
+enum CommissionStatus {
+  CALCULATED
+  ACCRUED
+  SETTLED
+  REVERSED
+}
+
+model Settlement {
+  id                    String              @id @default(cuid())
+  settlementNumber      String              @unique // STL-YYYYMMDD-XXXX
+  merchantId            String?
+  distributorId         String?
+  areaDistributorId     String?
+  periodStart           DateTime
+  periodEnd             DateTime
+  grossSalesPaise       Int
+  commissionPaise       Int
+  refundsDeductedPaise  Int                 @default(0)
+  netPayoutPaise        Int
+  status                SettlementStatus    @default(PENDING)
+  bankRefNumber         String?
+  processedBy           String?
+  processedAt           DateTime?
+  notes                 String?
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+
+  merchant              Merchant?           @relation(fields: [merchantId], references: [id])
+  distributor           Distributor?        @relation(fields: [distributorId], references: [id])
+  areaDistributor       AreaDistributor?    @relation(fields: [areaDistributorId], references: [id])
+
+  @@index([merchantId])
+  @@index([distributorId])
+  @@index([status])
+  @@map("settlements")
+}
+
+enum SettlementStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  ON_HOLD
+}
+

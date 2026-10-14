@@ -782,14 +782,79 @@ const generatedProducts: CatalogProduct[] = CATALOG_COLLECTIONS.flatMap((collect
   })
 );
 
-export const PRODUCTS: CatalogProduct[] = [...CORE_PRODUCTS, ...generatedProducts];
+export const BASE_PRODUCTS: CatalogProduct[] = [...CORE_PRODUCTS, ...generatedProducts];
+
+import marketplaceStore from "./marketplace-store";
+
+function convertMarketplaceProduct(mp: any): CatalogProduct {
+  return {
+    id: mp.id,
+    slug: mp.slug,
+    name: mp.name,
+    sku: mp.sku,
+    categorySlug: mp.categorySlug as CategorySlug,
+    brand: mp.brand || "iBNK Essentials",
+    mrpPaise: mp.mrpPaise,
+    sellingPricePaise: mp.sellingPricePaise,
+    rating: 4.8,
+    reviewCount: 12,
+    sold: 35,
+    images: mp.images?.length > 0 ? mp.images : ["https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&w=800&q=80"],
+    shortDescription: mp.shortDescription || mp.description || mp.name,
+    description: mp.description || mp.name,
+    specs: mp.specs || [{ key: "Brand", value: mp.brand }],
+    variants: (mp.variants || []).map((v: any) => ({
+      id: v.id,
+      name: v.name || "Standard",
+      sku: v.sku || mp.sku,
+      stockQuantity: v.stockQuantity ?? 10,
+      color: v.color,
+      size: v.size,
+      mrpPaise: v.mrpPaise || mp.mrpPaise,
+      sellingPricePaise: v.sellingPricePaise || mp.sellingPricePaise,
+      imageUrl: v.imageUrl,
+    })),
+    badge: mp.isBestSeller ? "Best Seller" : mp.isNewArrival ? "New" : undefined,
+    delivery: "Arrives in 2–3 business days via iBNK Delivery Hub",
+    isCodEligible: mp.isCodEligible ?? true,
+    freeShipping: mp.freeShipping ?? (mp.sellingPricePaise >= 49900),
+    isFeatured: Boolean(mp.isFeatured),
+    isNewArrival: Boolean(mp.isNewArrival),
+    isBestSeller: Boolean(mp.isBestSeller),
+  };
+}
+
+export function getAllProducts(): CatalogProduct[] {
+  // Only APPROVED and PUBLISHED products from authoritative store appear on storefront
+  const storePublished = marketplaceStore.getPublishedStoreProducts().map(convertMarketplaceProduct);
+  const unlistedSkus = new Set(
+    marketplaceStore
+      .getProducts()
+      .filter((p) => p.status === "UNLISTED" || p.status === "ARCHIVED")
+      .map((p) => p.sku.toLowerCase())
+  );
+
+  const filteredBase = BASE_PRODUCTS.filter((p) => !unlistedSkus.has(p.sku.toLowerCase()));
+  
+  // Deduplicate by SKU preferring live published store records
+  const map = new Map<string, CatalogProduct>();
+  for (const p of filteredBase) {
+    map.set(p.sku.toLowerCase(), p);
+  }
+  for (const p of storePublished) {
+    map.set(p.sku.toLowerCase(), p);
+  }
+  return Array.from(map.values());
+}
+
+export const PRODUCTS: CatalogProduct[] = getAllProducts();
 
 export function getProductBySlug(slug: string) {
-  return PRODUCTS.find((p) => p.slug === slug);
+  return getAllProducts().find((p) => p.slug === slug);
 }
 
 export function getProductById(id: string) {
-  return PRODUCTS.find((p) => p.id === id);
+  return getAllProducts().find((p) => p.id === id);
 }
 
 export function getVariant(product: CatalogProduct, variantId?: string) {
@@ -797,25 +862,27 @@ export function getVariant(product: CatalogProduct, variantId?: string) {
 }
 
 export function getProductsByCategory(slug: string) {
-  return PRODUCTS.filter((p) => p.categorySlug === slug);
+  return getAllProducts().filter((p) => p.categorySlug === slug);
 }
 
 export function searchProducts(query: string) {
   const q = query.trim().toLowerCase();
-  if (!q) return PRODUCTS;
-  return PRODUCTS.filter((p) =>
+  const all = getAllProducts();
+  if (!q) return all;
+  return all.filter((p) =>
     [p.name, p.brand, p.shortDescription, p.categorySlug].join(" ").toLowerCase().includes(q)
   );
 }
 
 export function getFlashDeals() {
-  return PRODUCTS.filter((p) => p.badge === "Flash Deal" || p.badge === "Rollback");
+  return getAllProducts().filter((p) => p.badge === "Flash Deal" || p.badge === "Rollback");
 }
 
 export function getFeatured() {
-  return PRODUCTS.filter((p) => p.isFeatured);
+  return getAllProducts().filter((p) => p.isFeatured);
 }
 
 export function getCategory(slug: string) {
   return CATEGORIES.find((c) => c.slug === slug);
 }
+

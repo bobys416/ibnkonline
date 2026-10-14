@@ -17,6 +17,10 @@ export const PERMISSIONS = {
   PRODUCTS_VIEW_ALL: "products.view_all",
   PRODUCTS_PUBLISH: "products.publish",
   PRODUCTS_APPROVE: "products.approve",
+  PRODUCTS_SUBMIT: "products.submit_for_approval",
+  PRODUCTS_UNLIST_REQUEST: "products.request_unlist",
+  PRODUCTS_UNLIST: "products.unlist",
+  PRODUCTS_ARCHIVE: "products.archive",
 
   // Categories
   CATEGORIES_MANAGE: "categories.manage",
@@ -25,16 +29,36 @@ export const PERMISSIONS = {
   INVENTORY_VIEW: "inventory.view",
   INVENTORY_MANAGE: "inventory.manage",
 
+  // Merchants
+  MERCHANTS_VIEW_ALL: "merchants.view_all",
+  MERCHANTS_ONBOARD: "merchants.onboard",
+  MERCHANTS_APPROVE: "merchants.approve",
+  MERCHANTS_REJECT: "merchants.reject",
+  MERCHANTS_SUSPEND: "merchants.suspend",
+  MERCHANTS_EDIT: "merchants.edit",
+
+  // Distributors & Area Distributors
+  DISTRIBUTORS_VIEW_ALL: "distributors.view_all",
+  DISTRIBUTORS_MANAGE: "distributors.manage",
+  AREA_DISTRIBUTORS_MANAGE: "area_distributors.manage",
+
+  // Approvals
+  APPROVALS_VIEW_ALL: "approvals.view_all",
+  APPROVALS_DECIDE: "approvals.decide",
+
   // Orders
   ORDERS_VIEW_OWN: "orders.view_own",
   ORDERS_VIEW_ALL: "orders.view_all",
   ORDERS_MANAGE: "orders.manage",
   ORDERS_CANCEL: "orders.cancel",
 
-  // Payments
+  // Payments & Financial Ledger
   PAYMENTS_VIEW: "payments.view",
   PAYMENTS_MANAGE: "payments.manage",
   PAYMENTS_REFUND: "payments.refund",
+  TRANSACTIONS_VIEW_ALL: "transactions.view_all",
+  SETTLEMENTS_VIEW_ALL: "settlements.view_all",
+  SETTLEMENTS_PROCESS: "settlements.process",
 
   // Users
   USERS_VIEW: "users.view",
@@ -68,7 +92,10 @@ export type PermissionName = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
 
 export const SYSTEM_ROLES = {
   SUPER_ADMIN: "super_admin",
+  MASTER_ADMIN: "master_admin",
   ADMIN: "admin",
+  PRODUCT_OPERATIONS: "product_operations",
+  MERCHANT_OPERATIONS: "merchant_operations",
   PRODUCT_MANAGER: "product_manager",
   PRODUCT_EDITOR: "product_editor",
   CATALOGUE_APPROVER: "catalogue_approver",
@@ -76,6 +103,8 @@ export const SYSTEM_ROLES = {
   ORDER_MANAGER: "order_manager",
   CUSTOMER_SUPPORT: "customer_support",
   FINANCE_OPS: "finance_ops",
+  DISTRIBUTOR_USER: "distributor_user",
+  AREA_DISTRIBUTOR_USER: "area_distributor_user",
   ANALYST: "analyst",
   CUSTOMER: "customer",
 } as const;
@@ -84,7 +113,24 @@ export const SYSTEM_ROLES = {
 
 export const ROLE_PERMISSIONS: Record<string, string[]> = {
   [SYSTEM_ROLES.SUPER_ADMIN]: Object.values(PERMISSIONS), // Full access
+  [SYSTEM_ROLES.MASTER_ADMIN]: Object.values(PERMISSIONS), // Full executive control center access
   [SYSTEM_ROLES.ADMIN]: Object.values(PERMISSIONS),
+  [SYSTEM_ROLES.PRODUCT_OPERATIONS]: [
+    PERMISSIONS.PRODUCTS_CREATE,
+    PERMISSIONS.PRODUCTS_EDIT,
+    PERMISSIONS.PRODUCTS_VIEW_ALL,
+    PERMISSIONS.PRODUCTS_SUBMIT,
+    PERMISSIONS.PRODUCTS_UNLIST_REQUEST,
+    PERMISSIONS.PRODUCTS_ARCHIVE,
+    PERMISSIONS.INVENTORY_VIEW,
+    PERMISSIONS.INVENTORY_MANAGE,
+    PERMISSIONS.CATEGORIES_MANAGE,
+  ],
+  [SYSTEM_ROLES.MERCHANT_OPERATIONS]: [
+    PERMISSIONS.MERCHANTS_VIEW_ALL,
+    PERMISSIONS.MERCHANTS_ONBOARD,
+    PERMISSIONS.MERCHANTS_EDIT,
+  ],
   [SYSTEM_ROLES.PRODUCT_MANAGER]: [
     PERMISSIONS.PRODUCTS_CREATE,
     PERMISSIONS.PRODUCTS_EDIT,
@@ -107,6 +153,8 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
     PERMISSIONS.PRODUCTS_VIEW_ALL,
     PERMISSIONS.PRODUCTS_APPROVE,
     PERMISSIONS.PRODUCTS_PUBLISH,
+    PERMISSIONS.APPROVALS_VIEW_ALL,
+    PERMISSIONS.APPROVALS_DECIDE,
   ],
   [SYSTEM_ROLES.INVENTORY_MANAGER]: [
     PERMISSIONS.INVENTORY_VIEW,
@@ -129,9 +177,20 @@ export const ROLE_PERMISSIONS: Record<string, string[]> = {
     PERMISSIONS.PAYMENTS_VIEW,
     PERMISSIONS.PAYMENTS_MANAGE,
     PERMISSIONS.PAYMENTS_REFUND,
+    PERMISSIONS.TRANSACTIONS_VIEW_ALL,
+    PERMISSIONS.SETTLEMENTS_VIEW_ALL,
     PERMISSIONS.ORDERS_VIEW_ALL,
     PERMISSIONS.ANALYTICS_VIEW,
     PERMISSIONS.AUDIT_VIEW,
+  ],
+  [SYSTEM_ROLES.DISTRIBUTOR_USER]: [
+    PERMISSIONS.DISTRIBUTORS_VIEW_ALL,
+    PERMISSIONS.ORDERS_VIEW_ALL,
+    PERMISSIONS.MERCHANTS_VIEW_ALL,
+  ],
+  [SYSTEM_ROLES.AREA_DISTRIBUTOR_USER]: [
+    PERMISSIONS.ORDERS_VIEW_ALL,
+    PERMISSIONS.MERCHANTS_VIEW_ALL,
   ],
   [SYSTEM_ROLES.ANALYST]: [
     PERMISSIONS.ANALYTICS_VIEW,

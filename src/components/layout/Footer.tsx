@@ -46,6 +46,8 @@ export function Footer() {
     { label: "Get the iBNK app", href: "/apps" },
     { label: "Careers", href: "/careers" },
     { label: "Sell on iBNK", href: "/sell" },
+    { label: "Operations Portal", href: "/admin" },
+    { label: "Master Admin", href: "/master-admin" },
   ];
 
   const legalLinks = [

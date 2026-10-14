@@ -87,3 +87,9 @@ export const GST_RATES: Record<string, number> = {
 export function isValidPaise(paise: number): boolean {
   return Number.isInteger(paise) && paise >= 0;
 }
+
+/**
+ * Common alias for formatting money in INR
+ */
+export const formatMoney = formatINRShort;
+
