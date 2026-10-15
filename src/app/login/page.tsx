@@ -1,71 +1,45 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState, useEffect } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { signInWithSupabase, signInWithOAuth } from "@/lib/supabase/auth";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useAuth } from "@/lib/auth-context";
+import { signInWithOAuth } from "@/lib/supabase/auth";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
-  const [email, setEmail] = useState("customer@buymecart.com");
-  const [password, setPassword] = useState("Customer@123456");
+  const searchParams = useSearchParams();
+  const redirectPath = searchParams.get("redirect") || "/account";
+
+  const { login, isAuthenticated } = useAuth();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [oauthBusy, setOauthBusy] = useState(false);
 
   const hasSupabase = isSupabaseConfigured();
 
+  // If already logged in, redirect immediately
+  useEffect(() => {
+    if (isAuthenticated) {
+      router.replace(redirectPath);
+    }
+  }, [isAuthenticated, router, redirectPath]);
+
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
     setError("");
 
-    // 1. If Supabase is configured, authenticate via Supabase Auth
-    if (hasSupabase) {
-      try {
-        const result = await signInWithSupabase(email, password);
-        if (result.success && result.user) {
-          localStorage.setItem(
-            "buymecart.session",
-            JSON.stringify({
-              id: result.user.id,
-              email: result.user.email,
-              fullName: result.user.fullName,
-              provider: "supabase",
-            })
-          );
-          router.push("/account");
-          return;
-        } else if (result.error) {
-          // If Supabase returned an error, display it or attempt fallback
-          console.warn("Supabase signin note:", result.error);
-        }
-      } catch (err) {
-        console.warn("Supabase auth fallback triggered:", err);
-      }
-    }
+    const res = await login(email, password);
+    setBusy(false);
 
-    // 2. Local / Mock / Demo fallback API authentication
-    try {
-      const res = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
-      });
-      const json = await res.json();
-      if (!res.ok || !json.success) {
-        localStorage.setItem("buymecart.session", JSON.stringify({ email, guestFallback: true }));
-        router.push("/account");
-        return;
-      }
-      localStorage.setItem("buymecart.session", JSON.stringify(json.data));
-      router.push("/account");
-    } catch {
-      localStorage.setItem("buymecart.session", JSON.stringify({ email, guestFallback: true }));
-      router.push("/account");
-    } finally {
-      setBusy(false);
+    if (res.success) {
+      router.push(redirectPath);
+    } else {
+      setError(res.error || "Invalid email or password.");
     }
   }
 
@@ -90,7 +64,7 @@ export default function LoginPage() {
         <div>
           <h1 className="text-3xl font-black text-[#172033]">Sign in</h1>
           <p className="text-sm text-slate-600 mt-1">
-            Access your iBNK orders, wishlist, and exclusive member savings.
+            Access your iBNK orders, wishlist, and user-specific savings.
           </p>
         </div>
 
@@ -127,7 +101,9 @@ export default function LoginPage() {
               <div className="absolute inset-0 flex items-center">
                 <div className="w-full border-t border-slate-200" />
               </div>
-              <span className="relative bg-white px-3 text-xs text-slate-400 font-semibold uppercase">Or with email</span>
+              <span className="relative bg-white px-3 text-xs text-slate-400 font-semibold uppercase">
+                Or with email
+              </span>
             </div>
           </div>
         )}
@@ -139,37 +115,54 @@ export default function LoginPage() {
               className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-[#1554D1] focus:ring-2 focus:ring-[#1554D1]/20 transition-all"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@example.com"
               type="email"
               required
             />
           </div>
           <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">Password</label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-bold text-slate-700">Password</label>
+              <Link
+                href="/help"
+                className="text-[11px] text-[#1554D1] hover:underline"
+              >
+                Forgot?
+              </Link>
+            </div>
             <input
               className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-[#1554D1] focus:ring-2 focus:ring-[#1554D1]/20 transition-all"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••"
               type="password"
               required
             />
           </div>
 
-          {error && <p className="text-sm text-rose-600 bg-rose-50 border border-rose-200 p-2.5 rounded-xl">{error}</p>}
+          {error && (
+            <p className="text-sm text-rose-600 bg-rose-50 border border-rose-200 p-2.5 rounded-xl font-medium">
+              {error}
+            </p>
+          )}
 
           <button
             type="submit"
             disabled={busy}
-            className="w-full py-3 rounded-full bg-[#FF7900] hover:bg-[#e06a00] text-white font-black shadow-md transition-all active:scale-98"
+            className="w-full py-3 rounded-full bg-[#FF7900] hover:bg-[#e06a00] text-white font-black shadow-md transition-all active:scale-98 disabled:opacity-50"
           >
             {busy ? "Signing in…" : "Sign in"}
           </button>
         </form>
 
-        <div className="flex items-center justify-between text-xs pt-1 border-t border-slate-100">
+        <div className="flex items-center justify-between text-xs pt-2 border-t border-slate-100">
           <span className="text-slate-500">
-            New here?{" "}
-            <Link href="/register" className="text-[#1554D1] font-bold hover:underline">
-              Create an account
+            Don&apos;t have an account?{" "}
+            <Link
+              href={`/register${redirectPath !== "/account" ? `?redirect=${encodeURIComponent(redirectPath)}` : ""}`}
+              className="text-[#1554D1] font-bold hover:underline"
+            >
+              Register here
             </Link>
           </span>
           <Link href="/help" className="text-slate-400 hover:text-slate-600">
@@ -178,5 +171,19 @@ export default function LoginPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="max-w-md mx-auto px-4 py-20 text-center text-sm text-slate-500">
+          Loading sign in…
+        </div>
+      }
+    >
+      <LoginForm />
+    </Suspense>
   );
 }

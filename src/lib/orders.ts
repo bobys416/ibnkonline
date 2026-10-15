@@ -25,6 +25,8 @@ export type StoredOrderItem = {
 
 export type StoredOrder = {
   orderNumber: string;
+  userId?: string;
+  userEmail?: string;
   createdAt: string;
   status: "PLACED" | "CONFIRMED" | "FAILED";
   paymentMethod: PaymentMethodChoice;
@@ -44,19 +46,72 @@ export type StoredOrder = {
 const ORDERS_KEY = "buymecart.orders.v1";
 const PENDING_PAYMENT_ORDER_KEY = "buymecart.pending-payment-order.v1";
 
-export function readOrders(): StoredOrder[] {
+/**
+ * Reads orders isolated strictly to the authenticated user.
+ * If user is not provided, returns empty array to prevent data leakage.
+ */
+export function readOrders(currentUser?: { id?: string; email?: string } | null): StoredOrder[] {
   if (typeof window === "undefined") return [];
   try {
     const raw = localStorage.getItem(ORDERS_KEY);
-    return raw ? (JSON.parse(raw) as StoredOrder[]) : [];
+    const allOrders = raw ? (JSON.parse(raw) as StoredOrder[]) : [];
+
+    // If an authenticated user is provided, filter strictly to this user
+    if (currentUser && (currentUser.id || currentUser.email)) {
+      const targetId = currentUser.id?.trim();
+      const targetEmail = currentUser.email?.trim().toLowerCase();
+      return allOrders.filter((o) => {
+        if (targetId && o.userId === targetId) return true;
+        if (targetEmail && o.userEmail?.toLowerCase() === targetEmail) return true;
+        return false;
+      });
+    }
+
+    // Unauthenticated visitors do not see orders belonging to registered accounts
+    return [];
   } catch {
     return [];
   }
 }
 
-export function saveOrder(order: StoredOrder) {
-  const existing = readOrders();
-  localStorage.setItem(ORDERS_KEY, JSON.stringify([order, ...existing]));
+/**
+ * Saves order with explicit user binding.
+ */
+export function saveOrder(
+  order: StoredOrder,
+  currentUser?: { id?: string; email?: string } | null
+) {
+  if (typeof window === "undefined") return;
+
+  const orderToSave: StoredOrder = {
+    ...order,
+    userId: order.userId || currentUser?.id,
+    userEmail: order.userEmail || currentUser?.email,
+  };
+
+  try {
+    const raw = localStorage.getItem(ORDERS_KEY);
+    const existing: StoredOrder[] = raw ? JSON.parse(raw) : [];
+    const deduped = existing.filter((o) => o.orderNumber !== orderToSave.orderNumber);
+    localStorage.setItem(ORDERS_KEY, JSON.stringify([orderToSave, ...deduped]));
+
+    // Background sync to server API
+    const sessionRaw = localStorage.getItem("buymecart.session");
+    const token = sessionRaw ? JSON.parse(sessionRaw)?.accessToken : null;
+
+    fetch("/api/orders", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify(orderToSave),
+    }).catch(() => {
+      // Offline or background network failure
+    });
+  } catch (error) {
+    console.warn("Could not save order to storage:", error);
+  }
 }
 
 export function savePendingPaymentOrder(order: StoredOrder) {
@@ -97,8 +152,37 @@ export function removePendingPaymentOrder() {
   sessionStorage.removeItem(PENDING_PAYMENT_ORDER_KEY);
 }
 
-export function getOrder(orderNumber: string) {
-  return readOrders().find((o) => o.orderNumber === orderNumber);
+/**
+ * Gets a specific order, verifying ownership if the order belongs to a user.
+ */
+export function getOrder(
+  orderNumber: string,
+  currentUser?: { id?: string; email?: string } | null
+): StoredOrder | undefined {
+  if (typeof window === "undefined") return undefined;
+  try {
+    const raw = localStorage.getItem(ORDERS_KEY);
+    const allOrders = raw ? (JSON.parse(raw) as StoredOrder[]) : [];
+    const order = allOrders.find((o) => o.orderNumber === orderNumber);
+    if (!order) return undefined;
+
+    // If order has an owner, verify caller ownership
+    if (order.userId || order.userEmail) {
+      if (!currentUser || (!currentUser.id && !currentUser.email)) {
+        return undefined; // An unauthenticated visitor cannot access an authenticated user's order
+      }
+      const matches =
+        (currentUser.id && order.userId === currentUser.id) ||
+        (currentUser.email && order.userEmail?.toLowerCase() === currentUser.email.toLowerCase());
+      if (!matches) {
+        return undefined; // Belongs to a different user!
+      }
+    }
+
+    return order;
+  } catch {
+    return undefined;
+  }
 }
 
 export function createOrderNumber() {

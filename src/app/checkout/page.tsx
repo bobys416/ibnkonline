@@ -82,8 +82,11 @@ function getStripeCheckoutUrl(value?: string) {
   }
 }
 
+import { useAuth } from "@/lib/auth-context";
+
 export default function CheckoutPage() {
   const router = useRouter();
+  const { user, isAuthenticated } = useAuth();
   const {
     items,
     subtotalPaise,
@@ -180,12 +183,14 @@ export default function CheckoutPage() {
 
         const confirmedOrder: StoredOrder = {
           ...pendingOrder,
+          userId: pendingOrder.userId || user?.id,
+          userEmail: pendingOrder.userEmail || user?.email,
           status: "PLACED",
           paymentStatus: "SUCCESS",
           gatewayCheckoutUrl: undefined,
           gatewayPaymentId: result.data.gatewayPaymentId,
         };
-        saveOrder(confirmedOrder);
+        saveOrder(confirmedOrder, user);
         removePendingPaymentOrder();
         clear();
         router.replace(`/orders/${confirmedOrder.orderNumber}`);
@@ -492,6 +497,8 @@ export default function CheckoutPage() {
     const orderNumber = opts.orderNumber ?? createOrderNumber();
     return {
       orderNumber,
+      userId: user?.id,
+      userEmail: user?.email,
       createdAt: new Date().toISOString(),
       status: "PLACED" as const,
       paymentMethod: opts.paymentMethod,
@@ -527,7 +534,7 @@ export default function CheckoutPage() {
     gatewayPaymentId?: string;
   }) {
     const order = buildOrder(opts);
-    saveOrder(order);
+    saveOrder(order, user);
     clear();
     router.push(`/orders/${order.orderNumber}`);
   }

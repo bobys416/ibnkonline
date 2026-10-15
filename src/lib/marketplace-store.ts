@@ -299,6 +299,35 @@ class MarketplaceState {
   auditLogs: AuditLogEntry[] = [];
   transactions: FinancialTransaction[] = [];
   settlements: SettlementRecord[] = [];
+  users: Array<{
+    id: string;
+    email: string;
+    fullName: string;
+    phone?: string;
+    passwordHash: string;
+    roles: string[];
+    status: "ACTIVE" | "PENDING_VERIFICATION" | "SUSPENDED" | "DEACTIVATED";
+    createdAt: string;
+    updatedAt: string;
+  }> = [];
+  orders: Array<{
+    orderNumber: string;
+    userId: string;
+    userEmail: string;
+    createdAt: string;
+    status: "PLACED" | "CONFIRMED" | "FAILED" | "CANCELLED" | "DELIVERED";
+    paymentMethod: "ONLINE" | "COD";
+    paymentStatus: "PENDING" | "SUCCESS" | "FAILED";
+    paymentMethodDetail?: string;
+    address: any;
+    items: any[];
+    subtotalPaise: number;
+    shippingPaise: number;
+    taxPaise: number;
+    totalPaise: number;
+    gatewayOrderId?: string;
+    gatewayPaymentId?: string;
+  }> = [];
 
   constructor() {
     this.seedInitialData();
@@ -1545,6 +1574,67 @@ class MarketplaceState {
       awaitingMasterReview,
       recentActivity: operatorLogs,
     };
+  }
+
+  // User Management
+  findUserByEmail(email: string) {
+    const normalized = email.trim().toLowerCase();
+    return this.users.find((u) => u.email.toLowerCase() === normalized);
+  }
+
+  findUserById(id: string) {
+    return this.users.find((u) => u.id === id);
+  }
+
+  createUser(data: {
+    email: string;
+    fullName: string;
+    phone?: string;
+    passwordHash: string;
+    roles?: string[];
+    status?: "ACTIVE" | "PENDING_VERIFICATION" | "SUSPENDED" | "DEACTIVATED";
+  }) {
+    const id = `usr-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    const now = new Date().toISOString();
+    const newUser = {
+      id,
+      email: data.email.trim().toLowerCase(),
+      fullName: data.fullName.trim(),
+      phone: data.phone?.trim(),
+      passwordHash: data.passwordHash,
+      roles: data.roles || ["customer"],
+      status: data.status || "ACTIVE",
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.users.push(newUser);
+    return newUser;
+  }
+
+  // Order Management (User-specific)
+  saveOrder(orderData: any) {
+    const existingIndex = this.orders.findIndex((o) => o.orderNumber === orderData.orderNumber);
+    const orderRecord = {
+      ...orderData,
+      updatedAt: new Date().toISOString(),
+    };
+    if (existingIndex >= 0) {
+      this.orders[existingIndex] = { ...this.orders[existingIndex], ...orderRecord };
+      return this.orders[existingIndex];
+    }
+    this.orders.unshift(orderRecord);
+    return orderRecord;
+  }
+
+  getUserOrders(userIdOrEmail: string) {
+    const term = userIdOrEmail.trim().toLowerCase();
+    return this.orders.filter(
+      (o) => o.userId === userIdOrEmail || o.userEmail?.toLowerCase() === term
+    );
+  }
+
+  getOrder(orderNumber: string) {
+    return this.orders.find((o) => o.orderNumber === orderNumber);
   }
 }
 

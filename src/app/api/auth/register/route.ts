@@ -18,12 +18,18 @@ import {
   rateLimitResponse,
   getClientIP,
 } from "@/lib/api-utils";
+import marketplaceStore from "@/lib/marketplace-store";
 import { SYSTEM_ROLES } from "@/lib/permissions";
+import {
+  generateAccessToken,
+  generateRefreshToken,
+  setRefreshTokenCookie,
+} from "@/lib/auth";
 
 export async function POST(request: NextRequest) {
   // Rate limiting
   const ip = getClientIP(request);
-  if (!rateLimit(`register:${ip}`, 5, 15 * 60 * 1000)) {
+  if (!rateLimit(`register:${ip}`, 10, 15 * 60 * 1000)) {
     return rateLimitResponse();
   }
 
@@ -36,101 +42,130 @@ export async function POST(request: NextRequest) {
   if (!validation.success) return validation.response;
 
   const { fullName, email, phone, password } = validation.data;
+  const normalizedEmail = email.trim().toLowerCase();
 
   try {
-    // Check for existing email
-    const existingEmail = await prisma.user.findUnique({
-      where: { email },
-      select: { id: true },
-    });
+    // 1. Check for existing email in Prisma (if reachable)
+    let existingEmail = false;
+    try {
+      const dbUser = await prisma.user.findUnique({
+        where: { email: normalizedEmail },
+        select: { id: true },
+      });
+      if (dbUser) existingEmail = true;
+    } catch {
+      // DB unreachable, check fallback store
+    }
+
+    if (!existingEmail && marketplaceStore.findUserByEmail(normalizedEmail)) {
+      existingEmail = true;
+    }
 
     if (existingEmail) {
-      // Don't reveal whether the email exists (prevent enumeration)
-      // But still return a useful message
       return apiError(
-        "An account with this email already exists. Please log in or use a different email.",
+        "An account with this email already exists. Please log in with your password.",
         409
       );
     }
 
-    // Check for existing phone if provided
-    if (phone) {
-      const existingPhone = await prisma.user.findUnique({
-        where: { phone },
-        select: { id: true },
-      });
-      if (existingPhone) {
-        return apiError(
-          "An account with this phone number already exists.",
-          409
-        );
-      }
-    }
-
-    // Hash password
+    // 2. Hash password
     const passwordHash = await hashPassword(password);
+    const roles = [SYSTEM_ROLES.CUSTOMER];
 
-    // Create user with customer role
-    const user = await prisma.$transaction(async (tx) => {
-      // Create the user
-      const newUser = await tx.user.create({
-        data: {
-          email,
-          phone: phone || null,
-          fullName,
-          passwordHash,
-          status: "PENDING_VERIFICATION",
-        },
-      });
+    let userId: string;
 
-      // Ensure customer role exists
-      let customerRole = await tx.role.findUnique({
-        where: { name: SYSTEM_ROLES.CUSTOMER },
-      });
-
-      if (!customerRole) {
-        customerRole = await tx.role.create({
+    // 3. Persist to Database if reachable
+    try {
+      const user = await prisma.$transaction(async (tx) => {
+        const newUser = await tx.user.create({
           data: {
-            name: SYSTEM_ROLES.CUSTOMER,
-            displayName: "Customer",
-            description: "Regular customer account",
-            isSystem: true,
+            email: normalizedEmail,
+            phone: phone || null,
+            fullName,
+            passwordHash,
+            status: "ACTIVE",
+            emailVerified: true,
           },
         });
-      }
 
-      // Assign customer role (never allow self-assignment of privileged roles)
-      await tx.userRole.create({
-        data: {
-          userId: newUser.id,
-          roleId: customerRole.id,
-        },
+        let customerRole = await tx.role.findUnique({
+          where: { name: SYSTEM_ROLES.CUSTOMER },
+        });
+
+        if (!customerRole) {
+          customerRole = await tx.role.create({
+            data: {
+              name: SYSTEM_ROLES.CUSTOMER,
+              displayName: "Customer",
+              description: "Regular customer account",
+              isSystem: true,
+            },
+          });
+        }
+
+        await tx.userRole.create({
+          data: {
+            userId: newUser.id,
+            roleId: customerRole.id,
+          },
+        });
+
+        return newUser;
       });
+      userId = user.id;
+    } catch (dbError) {
+      // Database connection fallback to marketplace store
+      console.warn("Database fallback for registration:", (dbError as Error).message);
+      const storeUser = marketplaceStore.createUser({
+        email: normalizedEmail,
+        fullName,
+        phone,
+        passwordHash,
+        roles,
+        status: "ACTIVE",
+      });
+      userId = storeUser.id;
+    }
 
-      return newUser;
+    // 4. Also mirror user in marketplaceStore for instant cross-lookup
+    if (!marketplaceStore.findUserByEmail(normalizedEmail)) {
+      marketplaceStore.createUser({
+        email: normalizedEmail,
+        fullName,
+        phone,
+        passwordHash,
+        roles,
+        status: "ACTIVE",
+      });
+    }
+
+    // 5. Generate authenticated tokens
+    const accessToken = generateAccessToken({
+      userId,
+      email: normalizedEmail,
+      roles,
     });
 
-    // Generate email verification token
-    const verificationToken = await generateVerificationToken(
-      email,
-      "EMAIL_VERIFICATION"
+    const refreshToken = await generateRefreshToken(
+      userId,
+      request.headers.get("user-agent") || undefined,
+      ip
     );
 
-    // TODO: Send verification email with token
-    // In development, log the token
-    if (process.env.NODE_ENV === "development") {
-      console.log(`[DEV] Email verification token for ${email}: ${verificationToken}`);
-    }
+    // Set refresh token as httpOnly cookie
+    await setRefreshTokenCookie(refreshToken);
 
     return apiSuccess(
       {
-        message:
-          "Registration successful. Please check your email to verify your account.",
-        userId: user.id,
-        // Only include token in development for testing
-        ...(process.env.NODE_ENV === "development" && {
-          _devVerificationToken: verificationToken,
-        }),
+        message: "Account created successfully.",
+        accessToken,
+        user: {
+          id: userId,
+          email: normalizedEmail,
+          fullName,
+          phone,
+          roles,
+        },
       },
       201
     );

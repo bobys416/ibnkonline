@@ -77,7 +77,10 @@ function ActiveCategoryNavigation() {
   return <CategoryNavigationLinks pathname={pathname} />;
 }
 
+import { useAuth } from "@/lib/auth-context";
+
 export function Header() {
+  const { user, isAuthenticated, logout } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
   const { itemCount, totalPaise } = useCart();
   const router = useRouter();
@@ -366,19 +369,37 @@ export function Header() {
 
           {/* Right Header Navigation Icons / Controls */}
           <div className="flex shrink-0 items-center gap-1 sm:gap-2">
-            <Link
-              href="/login"
-              className="hidden items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold text-[#172033] transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1554D1] sm:flex"
-            >
-              <div className="w-7 h-7 rounded-full bg-blue-50 text-[#1554D1] flex items-center justify-center">
-                <User className="h-4 w-4" />
-              </div>
-              <div className="text-left leading-tight hidden lg:block">
-                <span className="block text-[10px] font-medium text-[#475569]">Hello, Sign In</span>
-                <span className="font-bold">Account</span>
-              </div>
-              <ChevronDown className="hidden h-3.5 w-3.5 text-[#475569] lg:block" aria-hidden="true" />
-            </Link>
+            {isAuthenticated && user ? (
+              <Link
+                href="/account"
+                className="hidden items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold text-[#172033] transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1554D1] sm:flex"
+              >
+                <div className="w-7 h-7 rounded-full bg-[#1554D1] text-white font-bold text-xs flex items-center justify-center">
+                  {user.fullName.charAt(0).toUpperCase()}
+                </div>
+                <div className="text-left leading-tight hidden lg:block">
+                  <span className="block text-[10px] font-medium text-slate-500">
+                    Hello, {user.fullName.split(" ")[0]}
+                  </span>
+                  <span className="font-bold text-[#1554D1]">My Account</span>
+                </div>
+                <ChevronDown className="hidden h-3.5 w-3.5 text-[#475569] lg:block" aria-hidden="true" />
+              </Link>
+            ) : (
+              <Link
+                href="/login"
+                className="hidden items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold text-[#172033] transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1554D1] sm:flex"
+              >
+                <div className="w-7 h-7 rounded-full bg-blue-50 text-[#1554D1] flex items-center justify-center">
+                  <User className="h-4 w-4" />
+                </div>
+                <div className="text-left leading-tight hidden lg:block">
+                  <span className="block text-[10px] font-medium text-[#475569]">Hello, Sign In</span>
+                  <span className="font-bold">Account</span>
+                </div>
+                <ChevronDown className="hidden h-3.5 w-3.5 text-[#475569] lg:block" aria-hidden="true" />
+              </Link>
+            )}
 
             <Link
               href="/orders"
@@ -454,7 +475,61 @@ export function Header() {
             </div>
 
             <div className="p-4 overflow-y-auto flex-1 space-y-1 divide-y divide-slate-100">
+              {/* User Account Bar for Mobile */}
               <div className="pb-3">
+                {isAuthenticated && user ? (
+                  <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-8 h-8 rounded-full bg-[#1554D1] text-white font-bold text-xs flex items-center justify-center shrink-0">
+                        {user.fullName.charAt(0).toUpperCase()}
+                      </div>
+                      <div className="min-w-0 flex-1 leading-tight">
+                        <p className="font-bold text-xs text-[#172033] truncate">{user.fullName}</p>
+                        <p className="text-[10px] text-slate-500 truncate">{user.email}</p>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-200/60 text-[11px] font-bold">
+                      <Link
+                        href="/account"
+                        onClick={() => setIsDepartmentsOpen(false)}
+                        className="text-center py-1.5 rounded-lg bg-white border border-slate-200 hover:bg-slate-100 text-[#172033]"
+                      >
+                        Account
+                      </Link>
+                      <Link
+                        href="/orders"
+                        onClick={() => setIsDepartmentsOpen(false)}
+                        className="text-center py-1.5 rounded-lg bg-[#1554D1] text-white hover:bg-[#0E44B0]"
+                      >
+                        My Orders
+                      </Link>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-3 rounded-2xl bg-blue-50/70 border border-blue-100 space-y-2">
+                    <p className="text-xs font-bold text-[#172033]">Welcome to iBNK Marketplace</p>
+                    <p className="text-[11px] text-slate-600">Sign in to track orders and view saved items.</p>
+                    <div className="grid grid-cols-2 gap-2 pt-1">
+                      <Link
+                        href="/login"
+                        onClick={() => setIsDepartmentsOpen(false)}
+                        className="text-center py-1.5 rounded-lg bg-[#1554D1] text-white font-bold text-xs shadow-xs hover:bg-[#0E44B0]"
+                      >
+                        Sign in
+                      </Link>
+                      <Link
+                        href="/register"
+                        onClick={() => setIsDepartmentsOpen(false)}
+                        className="text-center py-1.5 rounded-lg bg-white border border-slate-200 text-slate-700 font-bold text-xs hover:bg-slate-50"
+                      >
+                        Register
+                      </Link>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="py-3">
                 <Link
                   href="/deals"
                   onClick={() => setIsDepartmentsOpen(false)}

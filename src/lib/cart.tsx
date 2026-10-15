@@ -59,17 +59,36 @@ function hydrate(lines: CartLine[]): HydratedCartLine[] {
   });
 }
 
+import { useAuth } from "@/lib/auth-context";
+
+const BASE_CART_KEY = "buymecart.cart.v2";
+
 export function CartProvider({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
   const [lines, setLines] = useState<CartLine[]>([]);
   const [ready, setReady] = useState(false);
 
+  // Dynamic user-scoped cart key
+  const cartKey = useMemo(() => {
+    return user?.id ? `${BASE_CART_KEY}:${user.id}` : `${BASE_CART_KEY}:guest`;
+  }, [user?.id]);
+
+  // Load cart when user changes or on initial mount
   useEffect(() => {
     let cancelled = false;
+    setReady(false);
+
     queueMicrotask(() => {
       let storedLines: CartLine[] = [];
       try {
-        const raw = localStorage.getItem(CART_KEY);
-        if (raw) storedLines = JSON.parse(raw) as CartLine[];
+        const raw = localStorage.getItem(cartKey);
+        if (raw) {
+          storedLines = JSON.parse(raw) as CartLine[];
+        } else if (!user?.id) {
+          // Check legacy key for guest migration
+          const legacy = localStorage.getItem("buymecart.cart.v1");
+          if (legacy) storedLines = JSON.parse(legacy) as CartLine[];
+        }
       } catch {
         storedLines = [];
       }
@@ -77,15 +96,21 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       setLines(storedLines);
       setReady(true);
     });
+
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [cartKey, user?.id]);
 
+  // Save cart changes strictly to the active user's key
   useEffect(() => {
     if (!ready) return;
-    localStorage.setItem(CART_KEY, JSON.stringify(lines));
-  }, [lines, ready]);
+    try {
+      localStorage.setItem(cartKey, JSON.stringify(lines));
+    } catch {
+      // Storage quota or restriction
+    }
+  }, [lines, ready, cartKey]);
 
   const addItem = useCallback((productId: string, variantId?: string, quantity = 1) => {
     const product = getProductById(productId);
