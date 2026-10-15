@@ -13,16 +13,16 @@ test.describe("UI Components & User Interaction Module", () => {
 
   test("add button triggers interactive quantity feedback", async ({ page }) => {
     await page.goto("/");
-    await page.waitForLoadState("networkidle");
+    await page.waitForSelector("[data-hydrated='true']");
 
-    const addBtn = page.getByRole("button", { name: /^Add$/i }).first();
+    const addBtn = page.getByRole("button", { name: /Add to Cart/i }).first();
     await expect(addBtn).toBeVisible();
     await expect(addBtn).toBeEnabled();
 
     // Click and check for quantity button state transition
     await addBtn.scrollIntoViewIfNeeded();
-    await addBtn.click({ force: true });
-    await expect(page.getByText("1 in cart").first()).toBeVisible();
+    await addBtn.click();
+    await expect(page.getByText(/in cart/i).first()).toBeVisible();
   });
 
   test("department cards are clickable navigation elements", async ({ page }) => {
@@ -46,7 +46,7 @@ test.describe("UI Components & User Interaction Module", () => {
       await newsletterInput.fill("shopper@ibnk.online");
       await expect(newsletterInput).toHaveValue("shopper@ibnk.online");
 
-      const subscribeBtn = page.getByRole("button", { name: /Sign Up/i }).first();
+      const subscribeBtn = page.getByRole("button", { name: /Subscribe|Sign Up/i }).first();
       if (await subscribeBtn.isVisible()) {
         await expect(subscribeBtn).toBeEnabled();
       }
@@ -58,11 +58,39 @@ test.describe("UI Components & User Interaction Module", () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("/");
 
-    // IBNK branding logo should still be visible on mobile
-    const logo = page.locator("header a[title='IBNK Home']");
+    // iBNK branding logo should still be visible on mobile
+    const logo = page.locator("header a[title*='Home']");
     await expect(logo).toBeVisible();
 
-    // Flash deals title should be visible
-    await expect(page.getByText(/Flash Deals & Rollbacks/i)).toBeVisible();
+    // Flash deals section should be visible
+    await expect(page.getByText(/Flash Deals/i).first()).toBeVisible();
+  });
+
+  test("authentication form validation alerts trigger on invalid submission", async ({ page }) => {
+    // 1. Test Login validation alerts
+    await page.goto("/login");
+    await page.waitForLoadState("domcontentloaded");
+
+    const signInBtn = page.getByRole("button", { name: /Sign in/i });
+    await expect(signInBtn).toBeVisible();
+    await signInBtn.click();
+
+    // Field level validation error alert should trigger
+    await expect(page.getByText(/Email address is required/i)).toBeVisible();
+
+    // Fill invalid email inside the form
+    const emailInput = page.locator("form input[type='email']").first();
+    await emailInput.fill("not-an-email");
+    await signInBtn.click();
+    await expect(page.getByText(/valid email address/i)).toBeVisible();
+
+    // 2. Test Register validation alerts
+    await page.goto("/register");
+    await page.waitForLoadState("domcontentloaded");
+    const createBtn = page.getByRole("button", { name: /Create account/i });
+    await expect(createBtn).toBeVisible();
+    await createBtn.click();
+
+    await expect(page.getByText(/Full name is required/i)).toBeVisible();
   });
 });

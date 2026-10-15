@@ -6,16 +6,21 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { signInWithOAuth } from "@/lib/supabase/auth";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
+import { AlertCircle, Eye, EyeOff, LogIn, ArrowRight } from "lucide-react";
 
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirectPath = searchParams.get("redirect") || "/account";
+  const prefilledEmail = searchParams.get("email") || "";
 
   const { login, isAuthenticated } = useAuth();
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(prefilledEmail);
   const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<{ email?: string; password?: string }>({});
+  const [generalError, setGeneralError] = useState("");
+  const [notFoundEmail, setNotFoundEmail] = useState("");
   const [busy, setBusy] = useState(false);
   const [oauthBusy, setOauthBusy] = useState(false);
 
@@ -28,31 +33,61 @@ function LoginForm() {
     }
   }, [isAuthenticated, router, redirectPath]);
 
+  function validate(): boolean {
+    const errors: { email?: string; password?: string } = {};
+
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail) {
+      errors.email = "Email address is required.";
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+      errors.email = "Please enter a valid email address (e.g. name@domain.com).";
+    }
+
+    if (!password) {
+      errors.password = "Password is required.";
+    } else if (password.length < 6) {
+      errors.password = "Password must be at least 6 characters.";
+    }
+
+    setFieldErrors(errors);
+    return Object.keys(errors).length === 0;
+  }
+
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setBusy(true);
-    setError("");
+    setGeneralError("");
+    setNotFoundEmail("");
 
+    if (!validate()) {
+      return;
+    }
+
+    setBusy(true);
     const res = await login(email, password);
     setBusy(false);
 
     if (res.success) {
       router.push(redirectPath);
     } else {
-      setError(res.error || "Invalid email or password.");
+      const errMsg = res.error || "Invalid email or password.";
+      setGeneralError(errMsg);
+
+      if (errMsg.toLowerCase().includes("not found") || errMsg.toLowerCase().includes("no account")) {
+        setNotFoundEmail(email.trim());
+      }
     }
   }
 
   async function handleGoogleSignIn() {
     setOauthBusy(true);
-    setError("");
+    setGeneralError("");
     try {
       const res = await signInWithOAuth("google");
       if (!res.success && res.error) {
-        setError(res.error);
+        setGeneralError(res.error);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Google sign in error");
+      setGeneralError(err instanceof Error ? err.message : "Google sign in error");
     } finally {
       setOauthBusy(false);
     }
@@ -60,13 +95,43 @@ function LoginForm() {
 
   return (
     <div className="max-w-md mx-auto px-4 py-16">
-      <div className="bg-white rounded-3xl border border-slate-200/80 p-8 space-y-5 shadow-sm">
+      <div className="bg-white rounded-3xl border border-slate-200/90 p-8 space-y-5 shadow-sm">
         <div>
           <h1 className="text-3xl font-black text-[#172033]">Sign in</h1>
           <p className="text-sm text-slate-600 mt-1">
             Access your iBNK orders, wishlist, and user-specific savings.
           </p>
         </div>
+
+        {/* Global Error Alert Banner */}
+        {generalError && (
+          <div className="rounded-2xl bg-rose-50 border border-rose-200 p-4 space-y-2 animate-in fade-in duration-200">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <p className="text-xs font-bold text-rose-900 uppercase tracking-wide">
+                  Sign in failed
+                </p>
+                <p className="text-xs text-rose-700 leading-relaxed font-medium">
+                  {generalError}
+                </p>
+              </div>
+            </div>
+
+            {/* Quick redirect helper if account is not registered */}
+            {notFoundEmail && (
+              <div className="pt-2 border-t border-rose-200/60">
+                <Link
+                  href={`/register?email=${encodeURIComponent(notFoundEmail)}&redirect=${encodeURIComponent(redirectPath)}`}
+                  className="inline-flex items-center gap-1.5 text-xs font-bold text-[#1554D1] hover:underline"
+                >
+                  <span>Create a new account with this email</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </Link>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Google OAuth Button */}
         {hasSupabase && (
@@ -108,58 +173,96 @@ function LoginForm() {
           </div>
         )}
 
-        <form onSubmit={onSubmit} className="space-y-3">
+        <form onSubmit={onSubmit} noValidate className="space-y-4">
+          {/* Email input field */}
           <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">Email</label>
+            <label className="block text-xs font-bold text-slate-700 mb-1">
+              Email address <span className="text-rose-500">*</span>
+            </label>
             <input
-              className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-[#1554D1] focus:ring-2 focus:ring-[#1554D1]/20 transition-all"
+              className={`w-full rounded-xl border px-4 py-2.5 text-sm outline-none transition-all ${
+                fieldErrors.email
+                  ? "border-rose-400 bg-rose-50/30 focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20"
+                  : "border-slate-200 focus:border-[#1554D1] focus:ring-2 focus:ring-[#1554D1]/20"
+              }`}
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e) => {
+                setEmail(e.target.value);
+                if (fieldErrors.email) setFieldErrors((prev) => ({ ...prev, email: undefined }));
+              }}
               placeholder="you@example.com"
               type="email"
-              required
+              autoComplete="email"
             />
-          </div>
-          <div>
-            <div className="flex items-center justify-between mb-1">
-              <label className="block text-xs font-bold text-slate-700">Password</label>
-              <Link
-                href="/help"
-                className="text-[11px] text-[#1554D1] hover:underline"
-              >
-                Forgot?
-              </Link>
-            </div>
-            <input
-              className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-[#1554D1] focus:ring-2 focus:ring-[#1554D1]/20 transition-all"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              type="password"
-              required
-            />
+            {fieldErrors.email && (
+              <p className="text-[11px] font-semibold text-rose-600 mt-1 flex items-center gap-1">
+                <AlertCircle className="w-3 h-3 shrink-0" />
+                <span>{fieldErrors.email}</span>
+              </p>
+            )}
           </div>
 
-          {error && (
-            <p className="text-sm text-rose-600 bg-rose-50 border border-rose-200 p-2.5 rounded-xl font-medium">
-              {error}
-            </p>
-          )}
+          {/* Password input field */}
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-bold text-slate-700">
+                Password <span className="text-rose-500">*</span>
+              </label>
+              <Link
+                href="/help"
+                className="text-[11px] text-[#1554D1] font-semibold hover:underline"
+              >
+                Forgot password?
+              </Link>
+            </div>
+            <div className="relative">
+              <input
+                className={`w-full rounded-xl border px-4 py-2.5 pr-11 text-sm outline-none transition-all ${
+                  fieldErrors.password
+                    ? "border-rose-400 bg-rose-50/30 focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20"
+                    : "border-slate-200 focus:border-[#1554D1] focus:ring-2 focus:ring-[#1554D1]/20"
+                }`}
+                value={password}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  if (fieldErrors.password) setFieldErrors((prev) => ({ ...prev, password: undefined }));
+                }}
+                placeholder="••••••••"
+                type={showPassword ? "text" : "password"}
+                autoComplete="current-password"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1"
+                aria-label={showPassword ? "Hide password" : "Show password"}
+              >
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+            {fieldErrors.password && (
+              <p className="text-[11px] font-semibold text-rose-600 mt-1 flex items-center gap-1">
+                <AlertCircle className="w-3 h-3 shrink-0" />
+                <span>{fieldErrors.password}</span>
+              </p>
+            )}
+          </div>
 
           <button
             type="submit"
             disabled={busy}
-            className="w-full py-3 rounded-full bg-[#FF7900] hover:bg-[#e06a00] text-white font-black shadow-md transition-all active:scale-98 disabled:opacity-50"
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-full bg-[#FF7900] hover:bg-[#e06a00] text-white font-black shadow-md transition-all active:scale-98 disabled:opacity-50"
           >
-            {busy ? "Signing in…" : "Sign in"}
+            <LogIn className="w-4 h-4" />
+            <span>{busy ? "Verifying credentials…" : "Sign in to account"}</span>
           </button>
         </form>
 
         <div className="flex items-center justify-between text-xs pt-2 border-t border-slate-100">
-          <span className="text-slate-500">
+          <span className="text-slate-600">
             Don&apos;t have an account?{" "}
             <Link
-              href={`/register${redirectPath !== "/account" ? `?redirect=${encodeURIComponent(redirectPath)}` : ""}`}
+              href={`/register${redirectPath !== "/account" ? `?redirect=${encodeURIComponent(redirectPath)}` : ""}${email ? `&email=${encodeURIComponent(email)}` : ""}`}
               className="text-[#1554D1] font-bold hover:underline"
             >
               Register here

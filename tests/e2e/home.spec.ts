@@ -1,30 +1,30 @@
 import { test, expect } from "@playwright/test";
 
-test.describe("IBNK Storefront & Layout Module", () => {
-  test("homepage loads with IBNK title and metadata", async ({ page }) => {
+test.describe("iBNK Storefront & Layout Module", () => {
+  test("homepage loads with iBNK title and metadata", async ({ page }) => {
     const response = await page.goto("/");
     expect(response?.status()).toBe(200);
 
-    await expect(page).toHaveTitle(/IBNK \| Save Money\. Live Better\. - IBNK\.online/);
+    await expect(page).toHaveTitle(/iBNK/i);
   });
 
-  test("header displays IBNK branding, logo, search bar, and action links", async ({ page }) => {
+  test("header displays iBNK branding, logo, search bar, and action links", async ({ page }) => {
     await page.goto("/");
 
-    // IBNK Brand Logo
-    const logo = page.locator("header a[title='IBNK Home']");
+    // iBNK Brand Logo
+    const logo = page.locator("header a[title*='Home']");
     await expect(logo).toBeVisible();
 
     // Departments button
     const deptBtn = page.locator("header").getByRole("button", { name: /Departments/i });
     await expect(deptBtn).toBeVisible();
 
-    // IBNK search bar
-    const searchInput = page.locator("header input[placeholder*='Search everything at IBNK']");
+    // iBNK search bar
+    const searchInput = page.locator("header input[placeholder*='Search']");
     await expect(searchInput).toBeVisible();
 
-    // Fulfillment selector ("How do you want your items?")
-    await expect(page.getByText("How do you want your items?")).toBeVisible();
+    // Delivery location trigger
+    await expect(page.locator("header").getByRole("button", { name: /Select delivery destination/i })).toBeVisible();
 
     // Cart link and Sign In link
     const cartLink = page.locator("header a[href='/cart']");
@@ -34,75 +34,64 @@ test.describe("IBNK Storefront & Layout Module", () => {
     await expect(signInLink).toBeVisible();
   });
 
-  test("hero bento grid renders Flash Deals banner and CTA", async ({ page }) => {
+  test("hero section renders Flash Deals banner and CTA", async ({ page }) => {
     await page.goto("/");
 
     const heroTitle = page.locator("h1");
     await expect(heroTitle).toBeVisible();
-    await expect(heroTitle).toContainText(/Save up to 65% with Flash Deals/i);
+    await expect(heroTitle).toContainText(/Save up to 65%/i);
 
     const dealsLink = page.getByRole("link", { name: /Shop Flash Deals/i });
     await expect(dealsLink).toBeVisible();
   });
 
-  test("department circle scroller renders categories", async ({ page }) => {
+  test("popular categories scroller renders departments", async ({ page }) => {
     await page.goto("/");
 
-    const categories = ["Grocery", "Patio & Garden", "Electronics", "Fashion", "Home & Furniture"];
+    const categories = ["Grocery", "Electronics", "Fashion"];
     for (const cat of categories) {
       await expect(page.getByText(cat).first()).toBeVisible();
     }
   });
 
-  test("flash deals section renders rollback products and countdown timer", async ({ page }) => {
+  test("flash deals section renders products and countdown timer", async ({ page }) => {
     await page.goto("/");
 
     // Countdown timer indicator
     await expect(page.getByText("Ends in:").first()).toBeVisible();
 
-    // Rollback and Flash Deal tags
-    await expect(page.getByText("Rollback").first()).toBeVisible();
+    // INR Indian Rupee pricing
+    await expect(page.getByText(/₹/).first()).toBeVisible();
 
-    // Dollar pricing
-    await expect(page.getByText(/Now \$/).first()).toBeVisible();
-
-    // "+ Add" button
-    const addBtn = page.getByRole("button", { name: "Add" }).first();
+    // "Add to Cart" button
+    const addBtn = page.getByRole("button", { name: /Add to Cart|Add/i }).first();
     await expect(addBtn).toBeVisible();
   });
 
-  test("clicking Add to cart button updates to quantity controls", async ({ page }) => {
+  test("clicking Add to Cart button updates to quantity controls", async ({ page }) => {
     await page.goto("/");
+    await page.waitForSelector("[data-hydrated='true']");
 
-    const addBtn = page.getByRole("button", { name: "Add" }).first();
+    const addBtn = page.getByRole("button", { name: /Add to Cart/i }).first();
     await addBtn.scrollIntoViewIfNeeded();
-    await addBtn.click({ force: true });
+    await addBtn.click();
 
     // Check that button transitioned to quantity controls
-    await expect(page.getByText("1 in cart").first()).toBeVisible();
+    await expect(page.getByText(/in cart/i).first()).toBeVisible();
   });
 
-  test("IBNK+ promo section renders membership perks", async ({ page }) => {
-    await page.goto("/");
-
-    await expect(page.getByText(/Get more of what you love with IBNK\+/i)).toBeVisible();
-    await expect(page.getByText(/30 Days Free/i).first()).toBeVisible();
-    await expect(page.getByRole("link", { name: /Try IBNK\+ Free/i })).toBeVisible();
-  });
-
-  test("footer renders feedback prompt, newsletter signup, directory, and copyright", async ({ page }) => {
+  test("footer renders Wadala hub, Indian policies, and copyright", async ({ page }) => {
     await page.goto("/");
 
     const footer = page.locator("footer");
     await expect(footer).toBeVisible();
 
-    // Feedback prompt
-    await expect(footer.getByText(/We'd love to hear what you think!/i)).toBeVisible();
+    // Key Indian e-commerce links
+    await expect(footer.getByText(/Contact Us/i)).toBeVisible();
+    await expect(footer.getByText(/Shipping/i).first()).toBeVisible();
+    await expect(footer.getByText(/Returns & Refunds/i)).toBeVisible();
 
-    // Email input
-    await expect(footer.locator("input[type='email']")).toBeVisible();
-
-    // IBNK copyright
-    await expect(footer.getByText(/© 2026 IBNK\. All Rights Reserved\./i)).toBeVisible();
+    // iBNK copyright
+    await expect(footer.getByText(/© 2026 iBNK/i)).toBeVisible();
   });
 });

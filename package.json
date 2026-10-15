@@ -30,6 +30,7 @@
     "lucide-react": "^0.500.0",
     "nanoid": "^5.1.0",
     "next": "16.4.0",
+    "razorpay": "^2.9.8",
     "react": "19.3.0",
     "react-dom": "19.3.0",
     "sharp": "^0.34.0",

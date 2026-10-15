@@ -6,21 +6,32 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { signInWithOAuth } from "@/lib/supabase/auth";
 import { isSupabaseConfigured } from "@/lib/supabase/client";
+import { AlertCircle, CheckCircle2, Eye, EyeOff, UserPlus, ArrowRight, ShieldCheck } from "lucide-react";
 
 function RegisterForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const redirectPath = searchParams.get("redirect") || "/account";
+  const prefilledEmail = searchParams.get("email") || "";
 
   const { register, isAuthenticated } = useAuth();
   const [fullName, setFullName] = useState("");
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(prefilledEmail);
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<{
+    fullName?: string;
+    email?: string;
+    phone?: string;
+    password?: string;
+    confirmPassword?: string;
+  }>({});
+  const [generalError, setGeneralError] = useState("");
+  const [alreadyExists, setAlreadyExists] = useState(false);
   const [busy, setBusy] = useState(false);
   const [oauthBusy, setOauthBusy] = useState(false);
-  const [error, setError] = useState("");
-  const [alreadyExists, setAlreadyExists] = useState(false);
 
   const hasSupabase = isSupabaseConfigured();
 
@@ -31,18 +42,58 @@ function RegisterForm() {
     }
   }, [isAuthenticated, router, redirectPath]);
 
+  function validate(): boolean {
+    const errors: {
+      fullName?: string;
+      email?: string;
+      phone?: string;
+      password?: string;
+      confirmPassword?: string;
+    } = {};
+
+    const trimmedName = fullName.trim();
+    if (!trimmedName) {
+      errors.fullName = "Full name is required.";
+    } else if (trimmedName.length < 2) {
+      errors.fullName = "Full name must be at least 2 characters.";
+    }
+
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail) {
+      errors.email = "Email address is required.";
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+      errors.email = "Please enter a valid email address (e.g. name@domain.com).";
+    }
+
+    const trimmedPhone = phone.trim();
+    if (trimmedPhone && !/^[6-9]\d{9}$/.test(trimmedPhone)) {
+      errors.phone = "Enter a valid 10-digit Indian mobile number (e.g. 9876543210).";
+    }
+
+    if (!password) {
+      errors.password = "Password is required.";
+    } else if (password.length < 6) {
+      errors.password = "Password must be at least 6 characters.";
+    }
+
+    if (password && confirmPassword && password !== confirmPassword) {
+      errors.confirmPassword = "Passwords do not match.";
+    }
+
+    setFieldErrors(errors);
+    return Object.keys(errors).length === 0;
+  }
+
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setBusy(true);
-    setError("");
+    setGeneralError("");
     setAlreadyExists(false);
 
-    if (password.length < 6) {
-      setError("Password must be at least 6 characters.");
-      setBusy(false);
+    if (!validate()) {
       return;
     }
 
+    setBusy(true);
     const res = await register(fullName, email, password, phone);
     setBusy(false);
 
@@ -52,20 +103,20 @@ function RegisterForm() {
       if (res.alreadyExists) {
         setAlreadyExists(true);
       }
-      setError(res.error || "Could not register account. Please check your details.");
+      setGeneralError(res.error || "Could not register account. Please check your details.");
     }
   }
 
   async function handleGoogleSignUp() {
     setOauthBusy(true);
-    setError("");
+    setGeneralError("");
     try {
       const res = await signInWithOAuth("google");
       if (!res.success && res.error) {
-        setError(res.error);
+        setGeneralError(res.error);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Google sign up error");
+      setGeneralError(err instanceof Error ? err.message : "Google sign up error");
     } finally {
       setOauthBusy(false);
     }
@@ -73,14 +124,54 @@ function RegisterForm() {
 
   return (
     <div className="max-w-md mx-auto px-4 py-16">
-      <div className="bg-white rounded-3xl border border-slate-200/80 p-8 space-y-4 shadow-sm">
+      <div className="bg-white rounded-3xl border border-slate-200/90 p-8 space-y-4 shadow-sm">
         <div>
           <h1 className="text-3xl font-black text-[#172033]">Create account</h1>
           <p className="text-sm text-slate-600 mt-1">
-            Join iBNK to enjoy personalized shopping and user-specific order tracking.
+            Join iBNK to enjoy personalized shopping, exclusive savings, and user-specific order tracking.
           </p>
         </div>
 
+        {/* Account Already Exists Alert */}
+        {alreadyExists && (
+          <div className="rounded-2xl bg-amber-50 border border-amber-200 p-4 space-y-2 animate-in fade-in duration-200">
+            <div className="flex items-start gap-3">
+              <CheckCircle2 className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <p className="text-xs font-bold text-amber-900 uppercase tracking-wide">
+                  Account Already Exists
+                </p>
+                <p className="text-xs text-amber-800 leading-relaxed font-medium">
+                  An account is already registered with <span className="font-bold">{email}</span>. You can sign in directly with your password.
+                </p>
+              </div>
+            </div>
+            <div className="pt-2">
+              <Link
+                href={`/login?email=${encodeURIComponent(email)}&redirect=${encodeURIComponent(redirectPath)}`}
+                className="w-full inline-flex items-center justify-center gap-1.5 py-2 px-4 bg-[#1554D1] hover:bg-[#0E44B0] text-white text-xs font-bold rounded-xl shadow-xs transition-all"
+              >
+                <span>Sign in with this account</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
+            </div>
+          </div>
+        )}
+
+        {/* General Error Alert */}
+        {generalError && !alreadyExists && (
+          <div className="rounded-2xl bg-rose-50 border border-rose-200 p-4 flex items-start gap-3 animate-in fade-in duration-200">
+            <AlertCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <p className="text-xs font-bold text-rose-900 uppercase tracking-wide">
+                Registration error
+              </p>
+              <p className="text-xs text-rose-700 leading-relaxed font-medium">{generalError}</p>
+            </div>
+          </div>
+        )}
+
+        {/* Google OAuth Button */}
         {hasSupabase && (
           <div>
             <button
@@ -120,81 +211,173 @@ function RegisterForm() {
           </div>
         )}
 
-        <form onSubmit={onSubmit} className="space-y-3">
+        <form onSubmit={onSubmit} noValidate className="space-y-3.5">
+          {/* Full Name */}
           <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">Full name</label>
+            <label className="block text-xs font-bold text-slate-700 mb-1">
+              Full name <span className="text-rose-500">*</span>
+            </label>
             <input
-              className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-[#1554D1] focus:ring-2 focus:ring-[#1554D1]/20 transition-all"
+              className={`w-full rounded-xl border px-4 py-2.5 text-sm outline-none transition-all ${
+                fieldErrors.fullName
+                  ? "border-rose-400 bg-rose-50/30 focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20"
+                  : "border-slate-200 focus:border-[#1554D1] focus:ring-2 focus:ring-[#1554D1]/20"
+              }`}
               placeholder="e.g. Rahul Sharma"
               value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              required
+              onChange={(e) => {
+                setFullName(e.target.value);
+                if (fieldErrors.fullName) setFieldErrors((prev) => ({ ...prev, fullName: undefined }));
+              }}
+              autoComplete="name"
             />
+            {fieldErrors.fullName && (
+              <p className="text-[11px] font-semibold text-rose-600 mt-1 flex items-center gap-1">
+                <AlertCircle className="w-3 h-3 shrink-0" />
+                <span>{fieldErrors.fullName}</span>
+              </p>
+            )}
           </div>
 
+          {/* Email Address */}
           <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">Email address</label>
+            <label className="block text-xs font-bold text-slate-700 mb-1">
+              Email address <span className="text-rose-500">*</span>
+            </label>
             <input
-              className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-[#1554D1] focus:ring-2 focus:ring-[#1554D1]/20 transition-all"
+              className={`w-full rounded-xl border px-4 py-2.5 text-sm outline-none transition-all ${
+                fieldErrors.email || alreadyExists
+                  ? "border-rose-400 bg-rose-50/30 focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20"
+                  : "border-slate-200 focus:border-[#1554D1] focus:ring-2 focus:ring-[#1554D1]/20"
+              }`}
               placeholder="you@example.com"
               type="email"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
+              onChange={(e) => {
+                setEmail(e.target.value);
+                setAlreadyExists(false);
+                if (fieldErrors.email) setFieldErrors((prev) => ({ ...prev, email: undefined }));
+              }}
+              autoComplete="email"
             />
+            {fieldErrors.email && (
+              <p className="text-[11px] font-semibold text-rose-600 mt-1 flex items-center gap-1">
+                <AlertCircle className="w-3 h-3 shrink-0" />
+                <span>{fieldErrors.email}</span>
+              </p>
+            )}
           </div>
 
+          {/* Mobile Number */}
           <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">Mobile number (optional)</label>
+            <label className="block text-xs font-bold text-slate-700 mb-1">
+              Mobile number <span className="text-slate-400 font-normal">(optional)</span>
+            </label>
             <input
-              className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-[#1554D1] focus:ring-2 focus:ring-[#1554D1]/20 transition-all"
+              className={`w-full rounded-xl border px-4 py-2.5 text-sm outline-none transition-all ${
+                fieldErrors.phone
+                  ? "border-rose-400 bg-rose-50/30 focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20"
+                  : "border-slate-200 focus:border-[#1554D1] focus:ring-2 focus:ring-[#1554D1]/20"
+              }`}
               placeholder="10-digit mobile number"
               value={phone}
-              onChange={(e) => setPhone(e.target.value)}
+              onChange={(e) => {
+                setPhone(e.target.value);
+                if (fieldErrors.phone) setFieldErrors((prev) => ({ ...prev, phone: undefined }));
+              }}
+              autoComplete="tel"
             />
+            {fieldErrors.phone && (
+              <p className="text-[11px] font-semibold text-rose-600 mt-1 flex items-center gap-1">
+                <AlertCircle className="w-3 h-3 shrink-0" />
+                <span>{fieldErrors.phone}</span>
+              </p>
+            )}
           </div>
 
+          {/* Password */}
           <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">Password</label>
-            <input
-              className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-[#1554D1] focus:ring-2 focus:ring-[#1554D1]/20 transition-all"
-              placeholder="Minimum 6 characters"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
+            <label className="block text-xs font-bold text-slate-700 mb-1">
+              Create password <span className="text-rose-500">*</span>
+            </label>
+            <div className="relative">
+              <input
+                className={`w-full rounded-xl border px-4 py-2.5 pr-11 text-sm outline-none transition-all ${
+                  fieldErrors.password
+                    ? "border-rose-400 bg-rose-50/30 focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20"
+                    : "border-slate-200 focus:border-[#1554D1] focus:ring-2 focus:ring-[#1554D1]/20"
+                }`}
+                placeholder="Minimum 6 characters"
+                type={showPassword ? "text" : "password"}
+                value={password}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  if (fieldErrors.password) setFieldErrors((prev) => ({ ...prev, password: undefined }));
+                }}
+                autoComplete="new-password"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-1"
+                aria-label={showPassword ? "Hide password" : "Show password"}
+              >
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+            {fieldErrors.password && (
+              <p className="text-[11px] font-semibold text-rose-600 mt-1 flex items-center gap-1">
+                <AlertCircle className="w-3 h-3 shrink-0" />
+                <span>{fieldErrors.password}</span>
+              </p>
+            )}
           </div>
 
-          {error && (
-            <div className="text-sm text-rose-700 bg-rose-50 border border-rose-200 p-3 rounded-xl space-y-1">
-              <p className="font-semibold">{error}</p>
-              {alreadyExists && (
-                <div className="pt-1">
-                  <Link
-                    href={`/login?email=${encodeURIComponent(email)}&redirect=${encodeURIComponent(redirectPath)}`}
-                    className="inline-block px-3 py-1 bg-[#1554D1] text-white text-xs font-bold rounded-lg shadow-xs hover:bg-[#0E44B0] transition-all"
-                  >
-                    Click here to Sign In →
-                  </Link>
-                </div>
-              )}
-            </div>
-          )}
+          {/* Confirm Password */}
+          <div>
+            <label className="block text-xs font-bold text-slate-700 mb-1">
+              Confirm password
+            </label>
+            <input
+              className={`w-full rounded-xl border px-4 py-2.5 text-sm outline-none transition-all ${
+                fieldErrors.confirmPassword
+                  ? "border-rose-400 bg-rose-50/30 focus:border-rose-500 focus:ring-2 focus:ring-rose-500/20"
+                  : "border-slate-200 focus:border-[#1554D1] focus:ring-2 focus:ring-[#1554D1]/20"
+              }`}
+              placeholder="Re-type password"
+              type={showPassword ? "text" : "password"}
+              value={confirmPassword}
+              onChange={(e) => {
+                setConfirmPassword(e.target.value);
+                if (fieldErrors.confirmPassword)
+                  setFieldErrors((prev) => ({ ...prev, confirmPassword: undefined }));
+              }}
+              autoComplete="new-password"
+            />
+            {fieldErrors.confirmPassword && (
+              <p className="text-[11px] font-semibold text-rose-600 mt-1 flex items-center gap-1">
+                <AlertCircle className="w-3 h-3 shrink-0" />
+                <span>{fieldErrors.confirmPassword}</span>
+              </p>
+            )}
+          </div>
 
-          <button
-            type="submit"
-            disabled={busy}
-            className="w-full py-3 rounded-full bg-[#FF7900] hover:bg-[#e06a00] text-white font-black shadow-md transition-all active:scale-98 disabled:opacity-50"
-          >
-            {busy ? "Creating account…" : "Create account"}
-          </button>
+          <div className="pt-2">
+            <button
+              type="submit"
+              disabled={busy}
+              className="w-full flex items-center justify-center gap-2 py-3 rounded-full bg-[#FF7900] hover:bg-[#e06a00] text-white font-black shadow-md transition-all active:scale-98 disabled:opacity-50"
+            >
+              <UserPlus className="w-4 h-4" />
+              <span>{busy ? "Setting up your account…" : "Create account"}</span>
+            </button>
+          </div>
         </form>
 
         <p className="text-xs text-slate-500 pt-2 border-t border-slate-100 text-center">
           Already have an account?{" "}
           <Link
-            href={`/login${redirectPath !== "/account" ? `?redirect=${encodeURIComponent(redirectPath)}` : ""}`}
+            href={`/login${redirectPath !== "/account" ? `?redirect=${encodeURIComponent(redirectPath)}` : ""}${email ? `&email=${encodeURIComponent(email)}` : ""}`}
             className="text-[#1554D1] font-bold hover:underline"
           >
             Sign in here
