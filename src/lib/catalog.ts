@@ -844,17 +844,63 @@ export function getAllProducts(): CatalogProduct[] {
   for (const p of storePublished) {
     map.set(p.sku.toLowerCase(), p);
   }
+  const dynamicCache = getDynamicProducts();
+  for (const p of dynamicCache.values()) {
+    map.set(p.sku.toLowerCase(), p);
+  }
+
   return Array.from(map.values());
+}
+
+const dynamicProductsCache = new Map<string, CatalogProduct>();
+
+export function registerDynamicProduct(product: CatalogProduct) {
+  if (!product || !product.id) return;
+  dynamicProductsCache.set(product.id, product);
+  if (product.slug) dynamicProductsCache.set(product.slug, product);
+  if (product.sku) dynamicProductsCache.set(product.sku.toLowerCase(), product);
+
+  if (typeof window !== "undefined") {
+    try {
+      const stored = localStorage.getItem("ibnk.dynamic_products");
+      const list: CatalogProduct[] = stored ? JSON.parse(stored) : [];
+      if (!list.some((item) => item.id === product.id)) {
+        list.push(product);
+        localStorage.setItem("ibnk.dynamic_products", JSON.stringify(list));
+      }
+    } catch {}
+  }
+}
+
+function getDynamicProducts(): Map<string, CatalogProduct> {
+  if (typeof window !== "undefined") {
+    try {
+      const stored = localStorage.getItem("ibnk.dynamic_products");
+      if (stored) {
+        const list: CatalogProduct[] = JSON.parse(stored);
+        for (const item of list) {
+          dynamicProductsCache.set(item.id, item);
+          if (item.slug) dynamicProductsCache.set(item.slug, item);
+          if (item.sku) dynamicProductsCache.set(item.sku.toLowerCase(), item);
+        }
+      }
+    } catch {}
+  }
+  return dynamicProductsCache;
 }
 
 export const PRODUCTS: CatalogProduct[] = getAllProducts();
 
 export function getProductBySlug(slug: string) {
-  return getAllProducts().find((p) => p.slug === slug);
+  const found = getAllProducts().find((p) => p.slug === slug);
+  if (found) return found;
+  return getDynamicProducts().get(slug);
 }
 
 export function getProductById(id: string) {
-  return getAllProducts().find((p) => p.id === id);
+  const found = getAllProducts().find((p) => p.id === id);
+  if (found) return found;
+  return getDynamicProducts().get(id);
 }
 
 export function getVariant(product: CatalogProduct, variantId?: string) {

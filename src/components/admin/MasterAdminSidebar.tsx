@@ -30,10 +30,6 @@ export function MasterAdminSidebar() {
     role: "MASTER_ADMIN",
   });
 
-  if (pathname === "/master-admin/login") {
-    return null;
-  }
-
   useEffect(() => {
     try {
       const stored = localStorage.getItem("ibnk.portal.user");
@@ -43,6 +39,10 @@ export function MasterAdminSidebar() {
       }
     } catch {}
   }, []);
+
+  if (pathname === "/master-admin/login") {
+    return null;
+  }
 
   const navItems = [
     { label: "Executive Overview", href: "/master-admin", icon: Layers, exact: true },

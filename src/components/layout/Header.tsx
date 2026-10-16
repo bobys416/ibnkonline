@@ -414,16 +414,17 @@ export function Header() {
               href="/cart"
               className="flex shrink-0 items-center gap-1.5 rounded-full bg-[#1554D1] px-2.5 py-2 text-xs font-bold text-white shadow-sm transition-colors hover:bg-[#0E44B0] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1554D1] focus-visible:ring-offset-2 active:scale-95 sm:gap-2 sm:px-3.5"
               aria-label={`Cart with ${itemCount} items`}
+              suppressHydrationWarning
             >
               <div className="relative">
                 <ShoppingCart className="h-4 w-4 text-white" />
                 {itemCount > 0 && (
-                  <span className="absolute -top-2 -right-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#FF7900] px-1 text-[10px] font-black text-[#172033] shadow-xs">
+                  <span className="absolute -top-2 -right-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#FF7900] px-1 text-[10px] font-black text-[#172033] shadow-xs" suppressHydrationWarning>
                     {itemCount}
                   </span>
                 )}
               </div>
-              <span className="hidden sm:inline">
+              <span className="hidden sm:inline" suppressHydrationWarning>
                 {totalPaise > 0 ? formatINRShort(totalPaise) : "Cart"}
               </span>
             </Link>

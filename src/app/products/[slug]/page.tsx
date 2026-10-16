@@ -1,11 +1,11 @@
 "use client";
 
-import { Suspense, useMemo, useState } from "react";
+import { Suspense, useMemo, useState, useEffect } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { ShieldCheck, Star, Truck, ChevronRight, Check } from "lucide-react";
-import { getCategory, getProductBySlug, PRODUCTS } from "@/lib/catalog";
+import { getCategory, getProductBySlug, registerDynamicProduct, PRODUCTS, type CatalogProduct } from "@/lib/catalog";
 import { calculateDiscountPercent, formatINR } from "@/lib/money";
 import { useCart } from "@/lib/cart";
 import { ProductCard } from "@/components/store/ProductCard";
@@ -13,11 +13,40 @@ import { ProductCard } from "@/components/store/ProductCard";
 function ProductDetailContent() {
   const params = useParams<{ slug: string }>();
   const router = useRouter();
-  const product = getProductBySlug(params.slug);
+  const [product, setProduct] = useState<CatalogProduct | undefined>(() => {
+    const p = getProductBySlug(params.slug);
+    if (p) registerDynamicProduct(p);
+    return p;
+  });
+  const [isFetching, setIsFetching] = useState(!product);
   const { addItem } = useCart();
   const [variantId, setVariantId] = useState(product?.variants[0]?.id ?? "");
   const [qty, setQty] = useState(1);
   const [addedNotice, setAddedNotice] = useState(false);
+
+  useEffect(() => {
+    if (!product && params.slug) {
+      setIsFetching(true);
+      fetch(`/api/products?slug=${encodeURIComponent(params.slug)}`)
+        .then((res) => res.json())
+        .then((json) => {
+          if (json.success && json.data?.product) {
+            const p = json.data.product;
+            registerDynamicProduct(p);
+            setProduct(p);
+            if (p.variants?.[0]?.id) {
+              setVariantId(p.variants[0].id);
+            }
+          }
+        })
+        .catch(() => {})
+        .finally(() => {
+          setIsFetching(false);
+        });
+    } else if (product) {
+      registerDynamicProduct(product);
+    }
+  }, [params.slug, product]);
 
   const related = useMemo(
     () => PRODUCTS.filter((p) => p.categorySlug === product?.categorySlug && p.id !== product?.id).slice(0, 4),
@@ -25,6 +54,13 @@ function ProductDetailContent() {
   );
 
   if (!product) {
+    if (isFetching) {
+      return (
+        <div className="max-w-xl mx-auto px-4 py-20 text-center space-y-3">
+          <p className="text-sm font-semibold text-slate-500 animate-pulse">Loading product details…</p>
+        </div>
+      );
+    }
     return (
       <div className="max-w-xl mx-auto px-4 py-20 text-center space-y-3">
         <h1 className="text-2xl font-black text-[#172033]">Product not found</h1>

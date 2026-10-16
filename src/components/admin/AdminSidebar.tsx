@@ -26,10 +26,6 @@ export function AdminSidebar() {
     role: "PRODUCT_OPERATIONS",
   });
 
-  if (pathname === "/admin/login") {
-    return null;
-  }
-
   useEffect(() => {
     try {
       const stored = localStorage.getItem("ibnk.portal.user");
@@ -39,6 +35,10 @@ export function AdminSidebar() {
       }
     } catch {}
   }, []);
+
+  if (pathname === "/admin/login") {
+    return null;
+  }
 
   const navItems = [
     { label: "Operations Dashboard", href: "/admin", icon: Layers, exact: true },
