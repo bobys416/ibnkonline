@@ -148,7 +148,7 @@ export default function HomePage() {
             <div className="rounded-3xl bg-gradient-to-br from-[#172033] to-[#0A2E80] text-white p-6 flex-1 space-y-3">
               <div className="flex items-center gap-2">
                 <IbnkLogo variant="white" className="h-6 w-auto" width={80} height={24} />
-                <span className="font-bold text-sm">Ab har dukaan, bank samaan</span>
+                <span className="font-bold text-sm">Discover More. Shop Better.</span>
               </div>
               <h3 className="text-base font-black">Quality products at honest prices</h3>
               <p className="text-xs text-slate-300">

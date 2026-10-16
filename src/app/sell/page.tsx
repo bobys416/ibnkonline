@@ -27,7 +27,7 @@ export default function SellOnIbnkPage() {
             Grow your business with iBNK across India
           </h1>
           <p className="text-sm sm:text-base text-slate-200 max-w-2xl leading-relaxed">
-            &quot;Ab har dukaan, bank samaan.&quot; Connect your retail store or brand directly with pan-India consumers through our fulfillment infrastructure and secure payment network.
+            &quot;Discover More. Shop Better.&quot; Connect your retail store or brand directly with pan-India consumers through our fulfillment infrastructure and secure payment network.
           </p>
           <div className="pt-2 flex flex-wrap gap-3">
             <a

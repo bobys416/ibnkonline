@@ -120,7 +120,7 @@ export function Footer() {
               India&apos;s trusted multi-category marketplace. Fast delivery, secure payments, and everyday low prices.
             </p>
             <p className="text-xs font-semibold text-[#FF7900] tracking-wide">
-              Ab har dukaan, bank samaan.
+              Discover More. Shop Better.
             </p>
           </div>
 

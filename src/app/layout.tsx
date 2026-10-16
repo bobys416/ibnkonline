@@ -7,16 +7,19 @@ import { Providers } from "@/app/providers";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://ibnk.online"),
-  title: "iBNK | Ab Har Dukaan, Bank Samaan — Online Marketplace",
+  title: "iBNK | Discover More. Shop Better. — Online Marketplace",
   description:
-    "Shop iBNK for everyday low prices across electronics, fashion, grocery, home essentials and more. Ab har dukaan, bank samaan.",
+    "Shop iBNK for everyday low prices across electronics, fashion, grocery, home essentials and more. Discover More. Shop Better.",
   icons: {
-    icon: "/images/logo/ibnk-icon-square.png",
-    shortcut: "/images/logo/ibnk-icon-square.png",
+    icon: [
+      { url: "/favicon.ico", sizes: "any" },
+      { url: "/images/logo/ibnk-icon-square.png", type: "image/png", sizes: "192x192" },
+    ],
+    shortcut: "/favicon.ico",
     apple: "/images/logo/ibnk-icon-square.png",
   },
   openGraph: {
-    title: "iBNK | Ab Har Dukaan, Bank Samaan",
+    title: "iBNK | Discover More. Shop Better.",
     description: "Shop online with confidence at iBNK — everyday low prices, fast delivery, and secure payments.",
     url: "https://ibnk.online",
     siteName: "iBNK",
@@ -25,7 +28,7 @@ export const metadata: Metadata = {
         url: "/images/logo/ibnk-logo.png",
         width: 1200,
         height: 630,
-        alt: "iBnK - Ab har dukaan, bank samaan",
+        alt: "iBnK - Discover More. Shop Better.",
       },
     ],
   },

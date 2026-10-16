@@ -4,7 +4,7 @@ import { IbnkLogo } from "@/components/ibnk/IbnkLogo";
 
 export const metadata = {
   title: "About iBNK | Online Marketplace for India",
-  description: "Learn about iBNK — everyday low prices, INR checkout, Wadala operations hub, and our mission: Ab har dukaan, bank samaan.",
+  description: "Learn about iBNK — everyday low prices, INR checkout, Wadala operations hub, and our mission: Discover More. Shop Better.",
 };
 
 export default function AboutPage() {
@@ -29,7 +29,7 @@ export default function AboutPage() {
                 About iBNK
               </h1>
               <p className="text-base text-[#1554D1] font-bold">
-                Ab har dukaan, bank samaan.
+                Discover More. Shop Better.
               </p>
             </div>
             <IbnkLogo variant="color" className="h-16 w-auto" width={180} height={108} />

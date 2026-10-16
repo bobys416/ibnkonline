@@ -5,17 +5,45 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { readOrders } from "@/lib/orders";
-import { User, Package, ShoppingCart, LogOut, ShieldCheck, Heart, ArrowRight } from "lucide-react";
+import {
+  User,
+  Package,
+  ShoppingCart,
+  LogOut,
+  ShieldCheck,
+  Heart,
+  ArrowRight,
+  Store,
+  RefreshCw,
+  CheckCircle2,
+  AlertCircle,
+  ExternalLink,
+} from "lucide-react";
 
 export default function AccountPage() {
   const router = useRouter();
   const { user, isAuthenticated, isLoading, logout } = useAuth();
   const [orderCount, setOrderCount] = useState(0);
+  const [shopifyInfo, setShopifyInfo] = useState<{
+    configured: boolean;
+    domain?: string;
+    sampleProductCount?: number;
+    status: string;
+  } | null>(null);
+  const [checkingShopify, setCheckingShopify] = useState(false);
 
   useEffect(() => {
     if (user) {
       const userOrders = readOrders(user);
       setOrderCount(userOrders.length);
+
+      // Check Shopify Vercel Integration status
+      setCheckingShopify(true);
+      fetch("/api/shopify/status")
+        .then((res) => res.json())
+        .then((data) => setShopifyInfo(data))
+        .catch(() => setShopifyInfo({ configured: false, status: "error" }))
+        .finally(() => setCheckingShopify(false));
     }
   }, [user]);
 
@@ -150,6 +178,97 @@ export default function AccountPage() {
             <p className="text-[11px] text-rose-600 font-bold mt-1">Explore discounts →</p>
           </div>
         </Link>
+      </div>
+
+      {/* Shopify Integration & Multi-Store Status */}
+      <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-xs space-y-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center">
+              <Store className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="font-bold text-sm text-[#172033]">Shopify Integration (Vercel)</h3>
+                <span className="flex h-2 w-2 relative">
+                  <span
+                    className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
+                      shopifyInfo?.configured ? "bg-emerald-400" : "bg-amber-400"
+                    }`}
+                  />
+                  <span
+                    className={`relative inline-flex rounded-full h-2 w-2 ${
+                      shopifyInfo?.configured ? "bg-emerald-500" : "bg-amber-500"
+                    }`}
+                  />
+                </span>
+              </div>
+              <p className="text-xs text-slate-500">
+                {shopifyInfo?.configured
+                  ? `Connected Store: ${shopifyInfo.domain || "Shopify Storefront"}`
+                  : "Shopify Storefront configuration synchronized from Vercel"}
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={() => {
+              setCheckingShopify(true);
+              fetch("/api/shopify/status")
+                .then((r) => r.json())
+                .then((d) => setShopifyInfo(d))
+                .finally(() => setCheckingShopify(false));
+            }}
+            disabled={checkingShopify}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-colors"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${checkingShopify ? "animate-spin text-[#1554D1]" : ""}`} />
+            <span>{checkingShopify ? "Syncing…" : "Sync"}</span>
+          </button>
+        </div>
+
+        <div className="rounded-2xl bg-slate-50 border border-slate-100 p-4 text-xs space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-slate-500">Integration Provider</span>
+            <span className="font-bold text-slate-800">Vercel Shopify Integration</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-slate-500">Storefront API Status</span>
+            <span
+              className={`font-bold flex items-center gap-1 ${
+                shopifyInfo?.configured ? "text-emerald-700" : "text-amber-700"
+              }`}
+            >
+              {shopifyInfo?.configured ? (
+                <>
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <span>Active &amp; Ready</span>
+                </>
+              ) : (
+                <>
+                  <AlertCircle className="w-3.5 h-3.5" />
+                  <span>Configuring Tokens</span>
+                </>
+              )}
+            </span>
+          </div>
+          {shopifyInfo?.domain && (
+            <div className="flex items-center justify-between">
+              <span className="text-slate-500">Store Domain</span>
+              <span className="font-mono text-slate-700">{shopifyInfo.domain}</span>
+            </div>
+          )}
+          {shopifyInfo?.sampleProductCount !== undefined && (
+            <div className="flex items-center justify-between">
+              <span className="text-slate-500">Available Products</span>
+              <span className="font-bold text-slate-800">
+                {shopifyInfo.sampleProductCount > 0
+                  ? `${shopifyInfo.sampleProductCount} synced samples`
+                  : "Ready for catalog sync"}
+              </span>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Operator shortcuts if privileged */}

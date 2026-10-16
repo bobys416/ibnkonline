@@ -56,7 +56,7 @@ export function IbnkLogo({
     <div className={`relative inline-flex items-center shrink-0 select-none ${className}`}>
       <Image
         src={src}
-        alt="iBnK - Ab har dukaan, bank samaan"
+        alt="iBnK - Discover More. Shop Better."
         width={finalWidth}
         height={finalHeight}
         priority={priority}
