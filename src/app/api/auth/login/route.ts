@@ -28,9 +28,9 @@ import marketplaceStore from "@/lib/marketplace-store";
 import { SYSTEM_PORTAL_ACCOUNTS } from "@/lib/portal-auth";
 
 export async function POST(request: NextRequest) {
-  // Rate limiting: 10 attempts per 15 minutes per IP
+  // Rate limiting: 60 attempts per 15 minutes per IP
   const ip = getClientIP(request);
-  if (!rateLimit(`login:${ip}`, 10, 15 * 60 * 1000)) {
+  if (!rateLimit(`login:${ip}`, 60, 15 * 60 * 1000)) {
     return rateLimitResponse();
   }
 

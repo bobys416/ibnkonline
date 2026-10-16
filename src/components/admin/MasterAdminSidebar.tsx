@@ -18,6 +18,7 @@ import {
   ArrowLeft,
   Menu,
   X,
+  LogOut,
 } from "lucide-react";
 
 export function MasterAdminSidebar() {
@@ -28,6 +29,10 @@ export function MasterAdminSidebar() {
     email: "masteradmin@ibnk.online",
     role: "MASTER_ADMIN",
   });
+
+  if (pathname === "/master-admin/login") {
+    return null;
+  }
 
   useEffect(() => {
     try {
@@ -85,7 +90,7 @@ export function MasterAdminSidebar() {
           <div className="p-5 border-b border-slate-800/80">
             <Link href="/" className="inline-block">
               <Image
-                src="/images/ibnk-logo.png"
+                src="/images/logo/ibnk-logo.png"
                 alt="iBNK Marketplace"
                 width={100}
                 height={32}
@@ -165,6 +170,19 @@ export function MasterAdminSidebar() {
               <ArrowLeft className="w-3.5 h-3.5 text-slate-400" />
               <span>Customer Storefront</span>
             </Link>
+            <button
+              type="button"
+              onClick={async () => {
+                await fetch("/api/auth/portal-logout", { method: "POST" });
+                localStorage.removeItem("ibnk.portal.user");
+                localStorage.removeItem("ibnk.portal.token");
+                window.location.href = "/master-admin/login";
+              }}
+              className="w-full flex items-center gap-2 px-3 py-2 text-rose-400 hover:text-rose-300 hover:bg-rose-950/40 rounded-lg transition-colors text-left"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              <span>Executive Sign Out</span>
+            </button>
           </div>
         </div>
       </aside>

@@ -45,4 +45,18 @@ test.describe("Security & Middleware Module", () => {
       expect(headers["x-ratelimit-remaining"]).toBeDefined();
     }
   });
+
+  test("unauthenticated visitors are redirected from /admin to /admin/login", async ({ page }) => {
+    await page.goto("/admin");
+    await expect(page).toHaveURL(/\/admin\/login/);
+    await expect(page.getByText("Product & Merchant Operations Portal")).toBeVisible();
+    await expect(page.getByRole("button", { name: /Authenticate & Enter Portal/i })).toBeVisible();
+  });
+
+  test("unauthenticated visitors are redirected from /master-admin to /master-admin/login", async ({ page }) => {
+    await page.goto("/master-admin");
+    await expect(page).toHaveURL(/\/master-admin\/login/);
+    await expect(page.getByText("Master Admin Control Center")).toBeVisible();
+    await expect(page.getByRole("button", { name: /Verify Clearance & Enter/i })).toBeVisible();
+  });
 });

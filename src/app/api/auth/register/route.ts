@@ -27,9 +27,9 @@ import {
 } from "@/lib/auth";
 
 export async function POST(request: NextRequest) {
-  // Rate limiting
+  // Rate limiting: 60 requests per 15 minutes per IP
   const ip = getClientIP(request);
-  if (!rateLimit(`register:${ip}`, 10, 15 * 60 * 1000)) {
+  if (!rateLimit(`register:${ip}`, 60, 15 * 60 * 1000)) {
     return rateLimitResponse();
   }
 

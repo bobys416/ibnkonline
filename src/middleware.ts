@@ -1,6 +1,6 @@
 // ============================================
 // BUYMECART - Middleware
-// Security headers, CORS, rate limiting, and route protection
+// Security headers, CORS, rate limiting, and portal RBAC route protection
 // ============================================
 
 import { NextResponse } from "next/server";
@@ -11,8 +11,8 @@ import type { NextRequest } from "next/server";
 const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
 
 const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute window
-const AUTH_RATE_LIMIT_MAX = 10; // max 10 auth requests per minute per IP
-const API_RATE_LIMIT_MAX = 100; // max 100 general API requests per minute per IP
+const AUTH_RATE_LIMIT_MAX = 60; // 60 auth requests per minute per IP
+const API_RATE_LIMIT_MAX = 120; // 120 general API requests per minute per IP
 
 function getClientIp(request: NextRequest): string {
   const forwardedFor = request.headers.get("x-forwarded-for");
@@ -59,9 +59,73 @@ export function middleware(request: NextRequest) {
     });
   }
 
+  // ---- Portal Route Protection: Product & Merchant Operations (/admin) ----
+  if (pathname.startsWith("/admin") && !pathname.startsWith("/admin/login")) {
+    const sessionCookie = request.cookies.get("ibnk_portal_session")?.value;
+    let isAuthorized = false;
+
+    if (sessionCookie) {
+      try {
+        const parsed = JSON.parse(sessionCookie);
+        const roles: string[] = parsed?.roles || [];
+        const requiredRoles = [
+          "product_operations",
+          "merchant_operations",
+          "master_admin",
+          "super_admin",
+          "finance_ops",
+        ];
+        if (roles.some((r) => requiredRoles.includes(r))) {
+          isAuthorized = true;
+        }
+      } catch {
+        // Invalid session format
+      }
+    }
+
+    if (!isAuthorized) {
+      const loginUrl = new URL("/admin/login", request.url);
+      loginUrl.searchParams.set("redirect", pathname);
+      return NextResponse.redirect(loginUrl);
+    }
+  }
+
+  // ---- Portal Route Protection: Master Admin Control Center (/master-admin) ----
+  if (pathname.startsWith("/master-admin") && !pathname.startsWith("/master-admin/login")) {
+    const sessionCookie = request.cookies.get("ibnk_portal_session")?.value;
+    let isAuthorized = false;
+
+    if (sessionCookie) {
+      try {
+        const parsed = JSON.parse(sessionCookie);
+        const roles: string[] = parsed?.roles || [];
+        if (roles.includes("master_admin") || roles.includes("super_admin")) {
+          isAuthorized = true;
+        }
+      } catch {
+        // Invalid session format
+      }
+    }
+
+    if (!isAuthorized) {
+      const loginUrl = new URL("/master-admin/login", request.url);
+      loginUrl.searchParams.set("redirect", pathname);
+      return NextResponse.redirect(loginUrl);
+    }
+  }
+
+  // Rate limit tracking headers for current request
+  let rateLimitHeaders: Record<string, string> = {};
+
   // ---- Rate Limiting for API routes ----
   if (pathname.startsWith("/api/auth/")) {
     const { allowed, remaining, reset } = checkRateLimit(ip, "auth", AUTH_RATE_LIMIT_MAX);
+    rateLimitHeaders = {
+      "X-RateLimit-Limit": String(AUTH_RATE_LIMIT_MAX),
+      "X-RateLimit-Remaining": String(remaining),
+      "X-RateLimit-Reset": String(reset),
+    };
+
     if (!allowed) {
       return NextResponse.json(
         { success: false, error: "Too many requests. Please try again later." },
@@ -69,15 +133,19 @@ export function middleware(request: NextRequest) {
           status: 429,
           headers: {
             "Retry-After": "60",
-            "X-RateLimit-Limit": String(AUTH_RATE_LIMIT_MAX),
-            "X-RateLimit-Remaining": "0",
-            "X-RateLimit-Reset": String(reset),
+            ...rateLimitHeaders,
           },
         }
       );
     }
   } else if (pathname.startsWith("/api/")) {
     const { allowed, remaining, reset } = checkRateLimit(ip, "api", API_RATE_LIMIT_MAX);
+    rateLimitHeaders = {
+      "X-RateLimit-Limit": String(API_RATE_LIMIT_MAX),
+      "X-RateLimit-Remaining": String(remaining),
+      "X-RateLimit-Reset": String(reset),
+    };
+
     if (!allowed) {
       return NextResponse.json(
         { success: false, error: "Rate limit exceeded. Please throttle requests." },
@@ -85,9 +153,7 @@ export function middleware(request: NextRequest) {
           status: 429,
           headers: {
             "Retry-After": "60",
-            "X-RateLimit-Limit": String(API_RATE_LIMIT_MAX),
-            "X-RateLimit-Remaining": "0",
-            "X-RateLimit-Reset": String(reset),
+            ...rateLimitHeaders,
           },
         }
       );
@@ -95,6 +161,13 @@ export function middleware(request: NextRequest) {
   }
 
   const response = NextResponse.next();
+
+  // Attach rate limit headers to API responses
+  if (pathname.startsWith("/api/auth/")) {
+    for (const [key, val] of Object.entries(rateLimitHeaders)) {
+      response.headers.set(key, val);
+    }
+  }
 
   // ---- Security Headers (OWASP recommendations) ----
   response.headers.set("X-DNS-Prefetch-Control", "on");
@@ -111,7 +184,7 @@ export function middleware(request: NextRequest) {
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "img-src 'self' data: blob: https: http:",
     "font-src 'self' data: https://fonts.gstatic.com",
-    "connect-src 'self'",
+    "connect-src 'self' https://*.supabase.co https://*.myshopify.com",
     "frame-src 'self'",
     "form-action 'self' https://checkout.stripe.com",
   ].join("; ");
