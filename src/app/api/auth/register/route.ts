@@ -119,7 +119,7 @@ export async function POST(request: NextRequest) {
       const storeUser = marketplaceStore.createUser({
         email: normalizedEmail,
         fullName,
-        phone,
+        phone: phone || undefined,
         passwordHash,
         roles,
         status: "ACTIVE",
@@ -132,7 +132,7 @@ export async function POST(request: NextRequest) {
       marketplaceStore.createUser({
         email: normalizedEmail,
         fullName,
-        phone,
+        phone: phone || undefined,
         passwordHash,
         roles,
         status: "ACTIVE",
@@ -163,7 +163,7 @@ export async function POST(request: NextRequest) {
           id: userId,
           email: normalizedEmail,
           fullName,
-          phone,
+          phone: phone || undefined,
           roles,
         },
       },

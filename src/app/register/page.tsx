@@ -66,7 +66,8 @@ function RegisterForm() {
     }
 
     const trimmedPhone = phone.trim();
-    if (trimmedPhone && !/^[6-9]\d{9}$/.test(trimmedPhone)) {
+    const cleanPhone = trimmedPhone.replace(/[\s\-\(\)\+]/g, "").replace(/^91/, "").replace(/^0/, "");
+    if (trimmedPhone && !/^[6-9]\d{9}$/.test(cleanPhone)) {
       errors.phone = "Enter a valid 10-digit Indian mobile number (e.g. 9876543210).";
     }
 
@@ -93,8 +94,9 @@ function RegisterForm() {
       return;
     }
 
+    const cleanPhone = phone.trim().replace(/[\s\-\(\)\+]/g, "").replace(/^91/, "").replace(/^0/, "");
     setBusy(true);
-    const res = await register(fullName, email, password, phone);
+    const res = await register(fullName, email, password, cleanPhone || undefined);
     setBusy(false);
 
     if (res.success) {

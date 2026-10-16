@@ -61,13 +61,14 @@ export function validateBody<T>(schema: ZodSchema<T>, data: unknown): {
     if (err instanceof ZodError) {
       const fieldErrors: Record<string, string[]> = {};
       for (const issue of err.issues) {
-        const path = issue.path.join(".");
+        const path = issue.path.join(".") || "form";
         if (!fieldErrors[path]) fieldErrors[path] = [];
         fieldErrors[path].push(issue.message);
       }
+      const firstErrorMessage = err.issues[0]?.message || "Validation failed";
       return {
         success: false,
-        response: apiError("Validation failed", 400, fieldErrors),
+        response: apiError(firstErrorMessage, 400, fieldErrors),
       };
     }
     return {

@@ -33,22 +33,30 @@ export const registerSchema = z
       .toLowerCase(),
     phone: z
       .string()
-      .regex(/^[6-9]\d{9}$/, "Invalid Indian mobile number")
-      .optional(),
+      .optional()
+      .nullable()
+      .transform((val) => {
+        if (!val) return undefined;
+        const cleaned = val.replace(/[\s\-\(\)\+]/g, "").replace(/^91/, "").replace(/^0/, "");
+        return cleaned || undefined;
+      })
+      .refine((val) => !val || /^[6-9]\d{9}$/.test(val), {
+        message: "Invalid Indian mobile number (must be 10 digits starting with 6-9)",
+      }),
     password: z
       .string()
-      .min(8, "Password must be at least 8 characters")
-      .max(128)
-      .regex(
-        /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?])/,
-        "Password must include uppercase, lowercase, number, and special character"
-      ),
-    confirmPassword: z.string(),
-    acceptTerms: z.literal(true, {
-      errorMap: () => ({ message: "You must accept the terms and conditions" }),
-    }),
+      .min(6, "Password must be at least 6 characters")
+      .max(128),
+    confirmPassword: z.string().optional(),
+    acceptTerms: z
+      .boolean()
+      .optional()
+      .default(true)
+      .refine((val) => val === true, {
+        message: "You must accept the terms and conditions",
+      }),
   })
-  .refine((data) => data.password === data.confirmPassword, {
+  .refine((data) => !data.confirmPassword || data.password === data.confirmPassword, {
     message: "Passwords do not match",
     path: ["confirmPassword"],
   });

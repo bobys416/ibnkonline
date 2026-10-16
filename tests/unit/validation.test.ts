@@ -63,6 +63,33 @@ describe("Input Validation Schemas (Zod)", () => {
       });
       expect(result.success).toBe(false);
     });
+
+    it("accepts passwords with at least 6 characters and tolerates phone normalization", () => {
+      const result = registerSchema.safeParse({
+        email: "bobys415@gmail.com",
+        password: "password123",
+        fullName: "Bobys",
+        phone: "+91 9876543210",
+      });
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.phone).toBe("9876543210");
+        expect(result.data.acceptTerms).toBe(true);
+      }
+    });
+
+    it("accepts registration when phone is empty string or omitted", () => {
+      const result = registerSchema.safeParse({
+        email: "bobys415@gmail.com",
+        password: "mypassword",
+        fullName: "Bobys User",
+        phone: "",
+      });
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.phone).toBeUndefined();
+      }
+    });
   });
 
   describe("loginSchema", () => {

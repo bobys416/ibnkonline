@@ -175,9 +175,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         if (!res.ok || !json.success) {
           setIsLoading(false);
+          const firstFieldErr =
+            json.errors && typeof json.errors === "object"
+              ? Object.values(json.errors as Record<string, string[]>).flat()[0]
+              : undefined;
           return {
             success: false,
-            error: json.error || "Could not complete registration. Please check your details.",
+            error:
+              (json.error && json.error !== "Validation failed" ? json.error : firstFieldErr) ||
+              json.error ||
+              "Could not complete registration. Please check your details.",
           };
         }
 
