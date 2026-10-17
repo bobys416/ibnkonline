@@ -853,27 +853,71 @@ export default function CheckoutPage() {
         <button
           onClick={placeOrder}
           disabled={busy || !cartIsReady || items.length === 0 || Boolean(paymentReturnSessionId)}
-          className="w-full py-3.5 rounded-full bg-[#FF7900] hover:bg-[#E06A00] text-white font-black text-sm tracking-wide shadow-sm transition-all disabled:opacity-60 active:scale-98"
+          className="w-full py-3.5 rounded-lg bg-[#FFD814] hover:bg-[#F7CA00] border border-[#FCD200] text-[#0F1111] font-bold text-sm tracking-wide shadow-xs transition-all disabled:opacity-60 active:scale-98 cursor-pointer"
         >
           {busy
             ? "Please wait…"
             : method === "COD"
-              ? "Place COD Order"
-              : "Continue to Secure Checkout"}
+              ? "Place Your Order (COD)"
+              : "Place Your Order and Pay"}
         </button>
+        <p className="text-[11px] text-slate-500 text-center">
+          By placing your order, you agree to iBNK&apos;s <Link href="/privacy" className="text-[#007185] hover:underline">privacy notice</Link> and <Link href="/terms" className="text-[#007185] hover:underline">conditions of use</Link>.
+        </p>
       </div>
-      <aside className="lg:col-span-5">
-        <div className="bg-white rounded-3xl border p-6 space-y-3">
-          <h2 className="font-black">Your items</h2>
-          {items.map((i) => (
-            <div key={`${i.productId}-${i.variantId}`} className="flex justify-between text-sm gap-3">
-              <span className="line-clamp-1">{i.product.name} × {i.quantity}</span>
-              <span className="font-semibold">{formatINR(i.lineTotalPaise)}</span>
+
+      <aside className="lg:col-span-5 space-y-4">
+        {/* Amazon Sticky Order Summary Box */}
+        <div className="bg-white rounded-xl border border-slate-200 p-6 space-y-4 shadow-xs sticky top-24">
+          <button
+            onClick={placeOrder}
+            disabled={busy || !cartIsReady || items.length === 0 || Boolean(paymentReturnSessionId)}
+            className="w-full py-3 rounded-lg bg-[#FFD814] hover:bg-[#F7CA00] border border-[#FCD200] text-[#0F1111] font-bold text-sm shadow-xs transition-all disabled:opacity-60 cursor-pointer"
+          >
+            {busy
+              ? "Processing…"
+              : method === "COD"
+                ? "Place Your Order (COD)"
+                : "Place Your Order and Pay"}
+          </button>
+          <p className="text-[10px] text-slate-500 text-center">
+            You will be redirected to secure bank/payment gateway
+          </p>
+
+          <div className="border-t border-slate-200 pt-3 space-y-2">
+            <h3 className="font-bold text-sm text-[#0F1111]">Order Summary</h3>
+            <div className="flex justify-between text-xs text-slate-600">
+              <span>Items ({items.reduce((s, i) => s + i.quantity, 0)}):</span>
+              <span>{formatINR(subtotalPaise)}</span>
             </div>
-          ))}
-          <div className="flex justify-between text-sm pt-2 border-t"><span>Subtotal</span><span>{formatINR(subtotalPaise)}</span></div>
-          <div className="flex justify-between text-sm"><span>Shipping</span><span>{shippingPaise ? formatINR(shippingPaise) : "Free"}</span></div>
-          <div className="flex justify-between font-black text-lg"><span>Total</span><span>{formatINR(totalPaise)}</span></div>
+            <div className="flex justify-between text-xs text-slate-600">
+              <span>Delivery:</span>
+              <span className="text-[#007600] font-semibold">{shippingPaise ? formatINR(shippingPaise) : "FREE Delivery"}</span>
+            </div>
+            {taxPaise > 0 && (
+              <div className="flex justify-between text-xs text-slate-600">
+                <span>Estimated Tax (GST):</span>
+                <span>{formatINR(taxPaise)}</span>
+              </div>
+            )}
+            <div className="flex justify-between font-bold text-base text-[#B12704] pt-2 border-t border-slate-200">
+              <span>Order Total:</span>
+              <span>{formatINR(totalPaise)}</span>
+            </div>
+          </div>
+
+          {/* Items Preview */}
+          <div className="border-t border-slate-200 pt-3 space-y-2">
+            <h4 className="font-semibold text-xs text-slate-700">Review Items</h4>
+            <div className="max-h-48 overflow-y-auto space-y-2 divide-y divide-slate-100 pr-1">
+              {items.map((i) => (
+                <div key={`${i.productId}-${i.variantId}`} className="pt-2 first:pt-0 flex justify-between text-xs gap-3">
+                  <span className="line-clamp-1 text-slate-700">{i.product.name} × {i.quantity}</span>
+                  <span className="font-semibold text-slate-900 shrink-0">{formatINR(i.lineTotalPaise)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </aside>
     </div>

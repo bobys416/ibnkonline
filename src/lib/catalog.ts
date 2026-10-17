@@ -146,7 +146,7 @@ const CORE_PRODUCTS: CatalogProduct[] = [
     ],
     shortDescription: "Crisp 4K HDR picture with Roku Smart TV built in.",
     description:
-      "Stream Netflix, Prime Video, YouTube, and more on a 55-inch 4K UHD panel. HDR, voice remote, and multiple HDMI ports make this a living-room staple at an everyday low price.",
+      "Stream Netflix, Disney+, YouTube, and more on a 55-inch 4K UHD panel. HDR, voice remote, and multiple HDMI ports make this a living-room staple at an everyday low price.",
     specs: [
       { key: "Screen size", value: "55 inch" },
       { key: "Resolution", value: "4K UHD (3840 x 2160)" },

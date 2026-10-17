@@ -4,7 +4,7 @@
 // ============================================
 
 import { NextRequest } from "next/server";
-import prisma from "@/lib/db";
+import prisma, { isDatabaseAvailable } from "@/lib/db";
 import {
   hashPassword,
   generateVerificationToken,
@@ -45,16 +45,18 @@ export async function POST(request: NextRequest) {
   const normalizedEmail = email.trim().toLowerCase();
 
   try {
-    // 1. Check for existing email in Prisma (if reachable)
+    // 1. Check for existing email in Prisma if reachable
     let existingEmail = false;
-    try {
-      const dbUser = await prisma.user.findUnique({
-        where: { email: normalizedEmail },
-        select: { id: true },
-      });
-      if (dbUser) existingEmail = true;
-    } catch {
-      // DB unreachable, check fallback store
+    if (await isDatabaseAvailable()) {
+      try {
+        const dbUser = await prisma.user.findUnique({
+          where: { email: normalizedEmail },
+          select: { id: true },
+        });
+        if (dbUser) existingEmail = true;
+      } catch {
+        // DB unreachable
+      }
     }
 
     if (!existingEmail && marketplaceStore.findUserByEmail(normalizedEmail)) {
@@ -72,50 +74,54 @@ export async function POST(request: NextRequest) {
     const passwordHash = await hashPassword(password);
     const roles = [SYSTEM_ROLES.CUSTOMER];
 
-    let userId: string;
+    let userId: string = "";
 
     // 3. Persist to Database if reachable
-    try {
-      const user = await prisma.$transaction(async (tx) => {
-        const newUser = await tx.user.create({
-          data: {
-            email: normalizedEmail,
-            phone: phone || null,
-            fullName,
-            passwordHash,
-            status: "ACTIVE",
-            emailVerified: true,
-          },
-        });
-
-        let customerRole = await tx.role.findUnique({
-          where: { name: SYSTEM_ROLES.CUSTOMER },
-        });
-
-        if (!customerRole) {
-          customerRole = await tx.role.create({
+    if (await isDatabaseAvailable()) {
+      try {
+        const user = await prisma.$transaction(async (tx) => {
+          const newUser = await tx.user.create({
             data: {
-              name: SYSTEM_ROLES.CUSTOMER,
-              displayName: "Customer",
-              description: "Regular customer account",
-              isSystem: true,
+              email: normalizedEmail,
+              phone: phone || null,
+              fullName,
+              passwordHash,
+              status: "ACTIVE",
+              emailVerified: true,
             },
           });
-        }
 
-        await tx.userRole.create({
-          data: {
-            userId: newUser.id,
-            roleId: customerRole.id,
-          },
+          let customerRole = await tx.role.findUnique({
+            where: { name: SYSTEM_ROLES.CUSTOMER },
+          });
+
+          if (!customerRole) {
+            customerRole = await tx.role.create({
+              data: {
+                name: SYSTEM_ROLES.CUSTOMER,
+                displayName: "Customer",
+                description: "Regular customer account",
+                isSystem: true,
+              },
+            });
+          }
+
+          await tx.userRole.create({
+            data: {
+              userId: newUser.id,
+              roleId: customerRole.id,
+            },
+          });
+
+          return newUser;
         });
+        userId = user.id;
+      } catch (dbError) {
+        console.warn("Database fallback for registration:", (dbError as Error).message);
+      }
+    }
 
-        return newUser;
-      });
-      userId = user.id;
-    } catch (dbError) {
-      // Database connection fallback to marketplace store
-      console.warn("Database fallback for registration:", (dbError as Error).message);
+    if (!userId) {
       const storeUser = marketplaceStore.createUser({
         email: normalizedEmail,
         fullName,

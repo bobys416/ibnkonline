@@ -4,7 +4,7 @@
 // ============================================
 
 import { NextRequest } from "next/server";
-import prisma from "@/lib/db";
+import prisma, { isDatabaseAvailable } from "@/lib/db";
 import {
   verifyPassword,
   generateAccessToken,
@@ -45,28 +45,30 @@ export async function POST(request: NextRequest) {
   const genericError = "Invalid email or password.";
 
   try {
-    // 1. Try finding user in Prisma
+    // 1. Try finding user in Prisma if database is reachable
     let user: any = null;
     let roles: string[] = [];
 
-    try {
-      const dbUser = await prisma.user.findUnique({
-        where: { email: normalizedEmail },
-        include: {
-          userRoles: {
-            include: {
-              role: true,
+    if (await isDatabaseAvailable()) {
+      try {
+        const dbUser = await prisma.user.findUnique({
+          where: { email: normalizedEmail },
+          include: {
+            userRoles: {
+              include: {
+                role: true,
+              },
             },
           },
-        },
-      });
+        });
 
-      if (dbUser) {
-        user = dbUser;
-        roles = dbUser.userRoles.map((ur) => ur.role.name);
+        if (dbUser) {
+          user = dbUser;
+          roles = dbUser.userRoles.map((ur) => ur.role.name);
+        }
+      } catch {
+        // Prisma connection failed, fall through to fallback stores
       }
-    } catch {
-      // Prisma connection failed, fall through to fallback stores
     }
 
     // 2. Check marketplaceStore if not found in Prisma

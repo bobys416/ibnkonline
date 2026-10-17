@@ -7,6 +7,30 @@
 // - Master Admin Control Center (/master-admin)
 // ============================================
 
+function getFs() {
+  if (typeof window === "undefined") {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      return require("fs");
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+function getPath() {
+  if (typeof window === "undefined") {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      return require("path");
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
 export type MarketplaceProductStatus =
   | "DRAFT"
   | "PENDING_REVIEW"
@@ -331,6 +355,136 @@ class MarketplaceState {
 
   constructor() {
     this.seedInitialData();
+    this.loadFromDisk();
+  }
+
+  private getStoragePath(): string | null {
+    const p = getPath();
+    if (!p) return null;
+    try {
+      return p.join(process.cwd(), "data", "marketplace-data.json");
+    } catch {
+      return null;
+    }
+  }
+
+  loadFromDisk() {
+    const fs = getFs();
+    const filePath = this.getStoragePath();
+    if (!fs || !filePath) return;
+
+    try {
+      if (fs.existsSync(filePath)) {
+        const raw = fs.readFileSync(filePath, "utf-8");
+        const parsed = JSON.parse(raw);
+        if (parsed) {
+          if (Array.isArray(parsed.users) && parsed.users.length > 0) {
+            const existingEmails = new Set(this.users.map((u) => u.email.toLowerCase()));
+            for (const u of parsed.users) {
+              if (!existingEmails.has(u.email.toLowerCase())) {
+                this.users.push(u);
+                existingEmails.add(u.email.toLowerCase());
+              }
+            }
+          }
+          if (Array.isArray(parsed.orders) && parsed.orders.length > 0) {
+            const existingOrderNums = new Set(this.orders.map((o) => o.orderNumber));
+            for (const o of parsed.orders) {
+              if (!existingOrderNums.has(o.orderNumber)) {
+                this.orders.push(o);
+                existingOrderNums.add(o.orderNumber);
+              }
+            }
+          }
+          if (Array.isArray(parsed.products) && parsed.products.length > 0) {
+            const existingIds = new Set(this.products.map((p) => p.id));
+            for (const p of parsed.products) {
+              if (!existingIds.has(p.id)) {
+                this.products.push(p);
+                existingIds.add(p.id);
+              }
+            }
+          }
+          if (Array.isArray(parsed.merchants) && parsed.merchants.length > 0) {
+            const existingIds = new Set(this.merchants.map((m) => m.id));
+            for (const m of parsed.merchants) {
+              if (!existingIds.has(m.id)) {
+                this.merchants.push(m);
+                existingIds.add(m.id);
+              }
+            }
+          }
+          if (Array.isArray(parsed.merchantApplications) && parsed.merchantApplications.length > 0) {
+            const existingIds = new Set(this.merchantApplications.map((a) => a.id));
+            for (const a of parsed.merchantApplications) {
+              if (!existingIds.has(a.id)) {
+                this.merchantApplications.push(a);
+                existingIds.add(a.id);
+              }
+            }
+          }
+          if (Array.isArray(parsed.approvalRequests) && parsed.approvalRequests.length > 0) {
+            const existingIds = new Set(this.approvalRequests.map((r) => r.id));
+            for (const r of parsed.approvalRequests) {
+              if (!existingIds.has(r.id)) {
+                this.approvalRequests.push(r);
+                existingIds.add(r.id);
+              }
+            }
+          }
+          if (Array.isArray(parsed.auditLogs) && parsed.auditLogs.length > 0) {
+            const existingIds = new Set(this.auditLogs.map((l) => l.id));
+            for (const l of parsed.auditLogs) {
+              if (!existingIds.has(l.id)) {
+                this.auditLogs.push(l);
+                existingIds.add(l.id);
+              }
+            }
+          }
+          if (Array.isArray(parsed.transactions) && parsed.transactions.length > 0) {
+            const existingIds = new Set(this.transactions.map((t) => t.id));
+            for (const t of parsed.transactions) {
+              if (!existingIds.has(t.id)) {
+                this.transactions.push(t);
+                existingIds.add(t.id);
+              }
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.warn("MarketplaceStore loadFromDisk warning:", e);
+    }
+  }
+
+  saveToDisk() {
+    const fs = getFs();
+    const filePath = this.getStoragePath();
+    if (!fs || !filePath) return;
+
+    try {
+      const data = {
+        users: this.users,
+        orders: this.orders,
+        products: this.products,
+        merchants: this.merchants,
+        merchantApplications: this.merchantApplications,
+        distributors: this.distributors,
+        areaDistributors: this.areaDistributors,
+        approvalRequests: this.approvalRequests,
+        auditLogs: this.auditLogs,
+        transactions: this.transactions,
+        settlements: this.settlements,
+      };
+      const p = getPath();
+      const dir = p ? p.dirname(filePath) : null;
+      if (dir && !fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true });
+      }
+      fs.writeFileSync(filePath, JSON.stringify(data, null, 2), "utf-8");
+    } catch (e) {
+      console.warn("MarketplaceStore saveToDisk warning:", e);
+    }
   }
 
   private seedInitialData() {
@@ -1608,6 +1762,7 @@ class MarketplaceState {
       updatedAt: now,
     };
     this.users.push(newUser);
+    this.saveToDisk();
     return newUser;
   }
 
@@ -1618,12 +1773,16 @@ class MarketplaceState {
       ...orderData,
       updatedAt: new Date().toISOString(),
     };
+    let result;
     if (existingIndex >= 0) {
       this.orders[existingIndex] = { ...this.orders[existingIndex], ...orderRecord };
-      return this.orders[existingIndex];
+      result = this.orders[existingIndex];
+    } else {
+      this.orders.unshift(orderRecord);
+      result = orderRecord;
     }
-    this.orders.unshift(orderRecord);
-    return orderRecord;
+    this.saveToDisk();
+    return result;
   }
 
   getUserOrders(userIdOrEmail: string) {

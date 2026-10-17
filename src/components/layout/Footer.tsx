@@ -57,7 +57,7 @@ export function Footer() {
   ];
 
   return (
-    <footer className="w-full bg-[#172033] text-slate-300 border-t border-slate-800">
+    <footer className="w-full bg-[#172033] text-slate-300 border-t border-slate-800 select-none">
       {/* 1. Customer Feedback & Newsletter Bar */}
       <div className="border-b border-slate-800/80 bg-[#121927] px-4 py-8">
         <div className="max-w-[1400px] mx-auto flex flex-col lg:flex-row items-center justify-between gap-6">

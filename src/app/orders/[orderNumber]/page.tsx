@@ -88,6 +88,51 @@ function OrderDetailContent() {
         </p>
       </div>
 
+      {/* Amazon Live Order Tracking Progress */}
+      <div className="bg-white rounded-2xl border border-slate-200/90 p-6 shadow-xs space-y-4">
+        <div className="flex items-center justify-between text-xs">
+          <span className="font-extrabold text-[#0F1111] text-sm">Package Tracking</span>
+          <span className="text-[#007600] font-bold">Estimated Delivery: Tomorrow by 8 PM</span>
+        </div>
+        <div className="relative flex items-center justify-between pt-2">
+          {/* Progress bar line */}
+          <div className="absolute top-1/2 left-0 right-0 h-1 bg-slate-200 -translate-y-1/2 z-0" />
+          <div className="absolute top-1/2 left-0 w-2/3 h-1 bg-[#007600] -translate-y-1/2 z-0" />
+
+          {/* Step 1: Placed */}
+          <div className="relative z-10 flex flex-col items-center gap-1.5 text-center">
+            <div className="w-7 h-7 rounded-full bg-[#007600] text-white flex items-center justify-center font-bold text-xs ring-4 ring-white">
+              ✓
+            </div>
+            <span className="text-[11px] font-bold text-slate-800">Ordered</span>
+          </div>
+
+          {/* Step 2: Packed */}
+          <div className="relative z-10 flex flex-col items-center gap-1.5 text-center">
+            <div className="w-7 h-7 rounded-full bg-[#007600] text-white flex items-center justify-center font-bold text-xs ring-4 ring-white">
+              ✓
+            </div>
+            <span className="text-[11px] font-bold text-slate-800">Packed</span>
+          </div>
+
+          {/* Step 3: Shipped */}
+          <div className="relative z-10 flex flex-col items-center gap-1.5 text-center">
+            <div className="w-7 h-7 rounded-full bg-[#007600] text-white flex items-center justify-center font-bold text-xs ring-4 ring-white">
+              ✓
+            </div>
+            <span className="text-[11px] font-bold text-[#007600]">Shipped</span>
+          </div>
+
+          {/* Step 4: Delivered */}
+          <div className="relative z-10 flex flex-col items-center gap-1.5 text-center">
+            <div className="w-7 h-7 rounded-full bg-slate-200 text-slate-500 flex items-center justify-center font-bold text-xs ring-4 ring-white">
+              4
+            </div>
+            <span className="text-[11px] font-medium text-slate-400">Delivery</span>
+          </div>
+        </div>
+      </div>
+
       <div className="bg-white rounded-3xl border border-slate-200 p-6 space-y-3 text-sm shadow-xs">
         <p className="font-bold text-slate-800 text-xs uppercase tracking-wide">Ordered Items</p>
         <div className="divide-y divide-slate-100">

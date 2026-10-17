@@ -63,6 +63,9 @@ export function ProductCard({ product }: { product: CatalogProduct }) {
             <span className="text-slate-400">({product.reviewCount.toLocaleString("en-IN")})</span>
           </div>
         )}
+        <div className="flex items-center gap-1.5 mb-1">
+          <span className="text-[10px] font-semibold text-emerald-700">FREE Delivery</span>
+        </div>
         <p className="text-[10px] text-slate-500 line-clamp-1 mb-3">{product.delivery}</p>
       </div>
       <QuantityPill product={product} />

@@ -6,7 +6,7 @@
 // ============================================
 
 import { NextRequest } from "next/server";
-import prisma from "@/lib/db";
+import prisma, { isDatabaseAvailable } from "@/lib/db";
 import { getAuthUser, apiSuccess, apiError } from "@/lib/api-utils";
 import marketplaceStore from "@/lib/marketplace-store";
 
@@ -24,21 +24,23 @@ export async function GET(request: NextRequest) {
 
     // 1. Try querying Prisma database if connected
     let userOrders: any[] = [];
-    try {
-      const dbOrders = await prisma.order.findMany({
-        where: { userId: authUser.userId },
-        include: {
-          items: true,
-          payments: true,
-        },
-        orderBy: { createdAt: "desc" },
-      });
+    if (await isDatabaseAvailable()) {
+      try {
+        const dbOrders = await prisma.order.findMany({
+          where: { userId: authUser.userId },
+          include: {
+            items: true,
+            payments: true,
+          },
+          orderBy: { createdAt: "desc" },
+        });
 
-      if (dbOrders && dbOrders.length > 0) {
-        userOrders = dbOrders;
+        if (dbOrders && dbOrders.length > 0) {
+          userOrders = dbOrders;
+        }
+      } catch {
+        // Prisma query failed, fallback to marketplace store
       }
-    } catch {
-      // Prisma offline or unmigrated, fallback to marketplace store
     }
 
     // 2. Fetch from marketplaceStore for user

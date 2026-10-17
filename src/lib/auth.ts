@@ -7,7 +7,7 @@ import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import { nanoid } from "nanoid";
 import { cookies } from "next/headers";
-import prisma from "@/lib/db";
+import prisma, { isDatabaseAvailable } from "@/lib/db";
 
 // ---- Configuration ----
 
@@ -87,21 +87,24 @@ export async function generateRefreshToken(
   const expiresAt = new Date();
   expiresAt.setDate(expiresAt.getDate() + REFRESH_TOKEN_EXPIRY_DAYS);
 
-  try {
-    await prisma.refreshToken.create({
-      data: {
-        token,
-        userId,
-        expiresAt,
-        userAgent,
-        ipAddress,
-      },
-    });
-  } catch (error) {
-    // Graceful fallback to memory store if PostgreSQL is unreachable
-    memoryRefreshTokens.set(token, { userId, expiresAt, revoked: false });
+  if (await isDatabaseAvailable()) {
+    try {
+      await prisma.refreshToken.create({
+        data: {
+          token,
+          userId,
+          expiresAt,
+          userAgent,
+          ipAddress,
+        },
+      });
+      return token;
+    } catch (error) {
+      // Graceful fallback to memory store if write fails
+    }
   }
 
+  memoryRefreshTokens.set(token, { userId, expiresAt, revoked: false });
   return token;
 }
 
@@ -110,32 +113,34 @@ export async function rotateRefreshToken(
   userAgent?: string,
   ipAddress?: string
 ): Promise<{ newToken: string; userId: string } | null> {
-  try {
-    const existing = await prisma.refreshToken.findUnique({
-      where: { token: oldToken },
-    });
-
-    if (existing) {
-      if (existing.revoked || existing.expiresAt < new Date()) {
-        if (existing.revoked) {
-          await prisma.refreshToken.updateMany({
-            where: { userId: existing.userId },
-            data: { revoked: true, revokedAt: new Date() },
-          });
-        }
-        return null;
-      }
-
-      await prisma.refreshToken.update({
-        where: { id: existing.id },
-        data: { revoked: true, revokedAt: new Date() },
+  if (await isDatabaseAvailable()) {
+    try {
+      const existing = await prisma.refreshToken.findUnique({
+        where: { token: oldToken },
       });
 
-      const newToken = await generateRefreshToken(existing.userId, userAgent, ipAddress);
-      return { newToken, userId: existing.userId };
+      if (existing) {
+        if (existing.revoked || existing.expiresAt < new Date()) {
+          if (existing.revoked) {
+            await prisma.refreshToken.updateMany({
+              where: { userId: existing.userId },
+              data: { revoked: true, revokedAt: new Date() },
+            });
+          }
+          return null;
+        }
+
+        await prisma.refreshToken.update({
+          where: { id: existing.id },
+          data: { revoked: true, revokedAt: new Date() },
+        });
+
+        const newToken = await generateRefreshToken(existing.userId, userAgent, ipAddress);
+        return { newToken, userId: existing.userId };
+      }
+    } catch {
+      // Database unreachable, fall through to memory check
     }
-  } catch {
-    // Database unreachable, fall through to memory check
   }
 
   // Check in-memory store
@@ -149,17 +154,20 @@ export async function rotateRefreshToken(
 }
 
 export async function revokeAllUserTokens(userId: string): Promise<void> {
-  try {
-    await prisma.refreshToken.updateMany({
-      where: { userId, revoked: false },
-      data: { revoked: true, revokedAt: new Date() },
-    });
-  } catch {
-    // Memory store fallback
-    for (const [key, value] of memoryRefreshTokens.entries()) {
-      if (value.userId === userId) {
-        value.revoked = true;
-      }
+  if (await isDatabaseAvailable()) {
+    try {
+      await prisma.refreshToken.updateMany({
+        where: { userId, revoked: false },
+        data: { revoked: true, revokedAt: new Date() },
+      });
+    } catch {
+      // Memory store fallback
+    }
+  }
+
+  for (const [key, value] of memoryRefreshTokens.entries()) {
+    if (value.userId === userId) {
+      value.revoked = true;
     }
   }
 }
@@ -190,42 +198,46 @@ export async function clearRefreshTokenCookie(): Promise<void> {
 // ---- Account Security ----
 
 export async function recordFailedLogin(userId: string): Promise<boolean> {
-  try {
-    const user = await prisma.user.update({
-      where: { id: userId },
-      data: { failedLoginAttempts: { increment: 1 } },
-    });
-
-    if (user.failedLoginAttempts >= MAX_FAILED_ATTEMPTS) {
-      const lockedUntil = new Date();
-      lockedUntil.setMinutes(lockedUntil.getMinutes() + LOCKOUT_DURATION_MINUTES);
-
-      await prisma.user.update({
+  if (await isDatabaseAvailable()) {
+    try {
+      const user = await prisma.user.update({
         where: { id: userId },
-        data: { lockedUntil },
+        data: { failedLoginAttempts: { increment: 1 } },
       });
 
-      return true; // Account is now locked
+      if (user.failedLoginAttempts >= MAX_FAILED_ATTEMPTS) {
+        const lockedUntil = new Date();
+        lockedUntil.setMinutes(lockedUntil.getMinutes() + LOCKOUT_DURATION_MINUTES);
+
+        await prisma.user.update({
+          where: { id: userId },
+          data: { lockedUntil },
+        });
+
+        return true; // Account is now locked
+      }
+    } catch {
+      // If database unavailable, do not lock out
     }
-  } catch {
-    // If database unavailable, do not lock out
   }
 
   return false;
 }
 
 export async function clearFailedLoginAttempts(userId: string): Promise<void> {
-  try {
-    await prisma.user.update({
-      where: { id: userId },
-      data: {
-        failedLoginAttempts: 0,
-        lockedUntil: null,
-        lastLoginAt: new Date(),
-      },
-    });
-  } catch {
-    // DB unavailable
+  if (await isDatabaseAvailable()) {
+    try {
+      await prisma.user.update({
+        where: { id: userId },
+        data: {
+          failedLoginAttempts: 0,
+          lockedUntil: null,
+          lastLoginAt: new Date(),
+        },
+      });
+    } catch {
+      // DB unavailable
+    }
   }
 }
 
@@ -331,26 +343,28 @@ export async function getCurrentUser(
 // ---- Get user with roles ----
 
 export async function getUserWithRoles(userId: string) {
-  try {
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      include: {
-        userRoles: {
-          include: {
-            role: {
-              include: {
-                rolePermissions: {
-                  include: { permission: true },
+  if (await isDatabaseAvailable()) {
+    try {
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        include: {
+          userRoles: {
+            include: {
+              role: {
+                include: {
+                  rolePermissions: {
+                    include: { permission: true },
+                  },
                 },
               },
             },
           },
         },
-      },
-    });
-    if (user) return user;
-  } catch {
-    // Fallback if DB is unreachable
+      });
+      if (user) return user;
+    } catch {
+      // Fallback if DB is unreachable
+    }
   }
 
   const storeUser = marketplaceStore.findUserById(userId);

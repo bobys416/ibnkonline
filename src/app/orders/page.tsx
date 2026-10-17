@@ -119,35 +119,85 @@ export default function OrdersPage() {
       </div>
 
       {orders.length === 0 ? (
-        <div className="bg-white rounded-3xl border border-slate-200 p-10 text-center space-y-4">
+        <div className="bg-white rounded-xl border border-slate-200 p-10 text-center space-y-4">
           <div className="w-12 h-12 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center mx-auto">
             <ShoppingBag className="w-6 h-6" />
           </div>
           <div>
-            <h2 className="text-lg font-bold text-[#172033]">No orders placed yet</h2>
+            <h2 className="text-lg font-bold text-[#0F1111]">No orders placed yet</h2>
             <p className="text-xs text-slate-500 mt-1">
               You haven&apos;t placed any orders with this account yet. Discover trending deals and essentials.
             </p>
           </div>
           <Link
             href="/deals"
-            className="inline-block px-6 py-2.5 rounded-full bg-[#FF7900] hover:bg-[#e06a00] text-white font-bold text-xs shadow-sm transition-all"
+            className="inline-block px-6 py-2.5 rounded-lg bg-[#FFD814] hover:bg-[#F7CA00] border border-[#FCD200] text-[#0F1111] font-bold text-xs shadow-xs transition-all"
           >
-            Explore Deals & Offers
+            Explore Deals &amp; Offers
           </Link>
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-4">
           {orders.map((o) => (
-            <Link
+            <div
               key={o.orderNumber}
-              href={`/orders/${o.orderNumber}`}
-              className="block bg-white rounded-2xl border border-slate-200/90 p-5 hover:border-[#1554D1]/40 hover:shadow-sm transition-all"
+              className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-xs hover:border-slate-300 transition-all"
             >
-              <div className="flex items-start justify-between gap-3">
-                <div className="space-y-1">
+              {/* Amazon Order Card Header Bar */}
+              <div className="bg-[#F0F2F2] border-b border-slate-200 px-5 py-3 text-xs text-slate-600 flex flex-wrap items-center justify-between gap-4">
+                <div className="flex flex-wrap items-center gap-6">
+                  <div>
+                    <span className="block text-[10px] uppercase font-bold text-slate-500 tracking-wider">Order Placed</span>
+                    <span className="font-medium text-[#0F1111]">
+                      {new Date(o.createdAt).toLocaleDateString("en-IN", {
+                        day: "numeric",
+                        month: "short",
+                        year: "numeric",
+                      })}
+                    </span>
+                  </div>
+                  <div>
+                    <span className="block text-[10px] uppercase font-bold text-slate-500 tracking-wider">Total</span>
+                    <span className="font-bold text-[#0F1111]">{formatINR(o.totalPaise)}</span>
+                  </div>
+                  <div>
+                    <span className="block text-[10px] uppercase font-bold text-slate-500 tracking-wider">Ship To</span>
+                    <span className="font-medium text-[#007185] hover:underline cursor-pointer">
+                      {o.address?.fullName || user.fullName}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="text-right">
+                  <span className="block text-[10px] uppercase font-bold text-slate-500 tracking-wider">
+                    Order # {o.orderNumber}
+                  </span>
+                  <div className="flex items-center gap-2 pt-0.5">
+                    <Link
+                      href={`/orders/${o.orderNumber}`}
+                      className="text-[#007185] hover:underline hover:text-[#C7511F] font-semibold text-xs"
+                    >
+                      View order details
+                    </Link>
+                    <span className="text-slate-300">|</span>
+                    <span className="text-slate-500 text-xs">
+                      {o.paymentMethod === "COD" ? "Cash on Delivery" : "Paid via Card/UPI"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Amazon Order Card Body */}
+              <div className="p-5 flex flex-col md:flex-row items-start justify-between gap-6">
+                <div className="space-y-4 flex-1">
                   <div className="flex items-center gap-2">
-                    <span className="font-black text-[#172033] text-sm sm:text-base">{o.orderNumber}</span>
+                    <h3 className="font-bold text-base text-[#0F1111]">
+                      {o.status === "CONFIRMED"
+                        ? "Order Confirmed - Arriving Soon"
+                        : o.status === "FAILED"
+                          ? "Order Incomplete"
+                          : "Arriving in 1-2 Days"}
+                    </h3>
                     <span
                       className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
                         o.paymentStatus === "SUCCESS"
@@ -157,28 +207,59 @@ export default function OrdersPage() {
                             : "bg-slate-100 text-slate-600"
                       }`}
                     >
-                      {o.paymentMethod === "COD" ? "Cash on Delivery" : o.paymentStatus}
+                      {o.status}
                     </span>
                   </div>
-                  <p className="text-xs text-slate-500">
-                    {new Date(o.createdAt).toLocaleDateString("en-IN", {
-                      day: "numeric",
-                      month: "short",
-                      year: "numeric",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </p>
-                  <p className="text-xs text-slate-600 pt-1">
-                    {o.items?.length || 0} item{o.items?.length === 1 ? "" : "s"} · Deliver to {o.address?.fullName}
-                  </p>
+
+                  {o.items?.map((item) => (
+                    <div key={`${item.productId}-${item.variantId}`} className="flex items-start gap-4">
+                      {item.imageUrl && (
+                        <div className="w-16 h-16 rounded border border-slate-200 overflow-hidden shrink-0 bg-slate-50 relative">
+                          <img
+                            src={item.imageUrl}
+                            alt={item.productName}
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <Link
+                          href={`/products/${item.slug}`}
+                          className="font-semibold text-sm text-[#007185] hover:underline hover:text-[#C7511F] line-clamp-2 leading-snug"
+                        >
+                          {item.productName}
+                        </Link>
+                        <p className="text-xs text-slate-500 mt-1">
+                          Qty: {item.quantity} · {formatINR(item.unitPricePaise)} each
+                        </p>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-                <div className="text-right">
-                  <p className="font-black text-sm sm:text-base text-[#172033]">{formatINR(o.totalPaise)}</p>
-                  <span className="text-[11px] font-bold text-[#1554D1] hover:underline">View details →</span>
+
+                {/* Amazon Action Buttons */}
+                <div className="flex flex-col gap-2 w-full md:w-52 shrink-0">
+                  <Link
+                    href={`/orders/${o.orderNumber}`}
+                    className="w-full text-center py-2 px-3 rounded-lg bg-[#FFD814] hover:bg-[#F7CA00] border border-[#FCD200] text-xs font-bold text-[#0F1111] shadow-xs transition-colors"
+                  >
+                    Track package
+                  </Link>
+                  <Link
+                    href={`/products/${o.items?.[0]?.slug || ""}`}
+                    className="w-full text-center py-2 px-3 rounded-lg bg-white hover:bg-slate-50 border border-slate-300 text-xs font-semibold text-[#0F1111] shadow-2xs transition-colors"
+                  >
+                    Buy it again
+                  </Link>
+                  <Link
+                    href="/help"
+                    className="w-full text-center py-2 px-3 rounded-lg bg-white hover:bg-slate-50 border border-slate-300 text-xs font-semibold text-[#0F1111] shadow-2xs transition-colors"
+                  >
+                    Return or replace items
+                  </Link>
                 </div>
               </div>
-            </Link>
+            </div>
           ))}
         </div>
       )}

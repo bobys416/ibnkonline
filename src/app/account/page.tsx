@@ -13,37 +13,17 @@ import {
   ShieldCheck,
   Heart,
   ArrowRight,
-  Store,
-  RefreshCw,
-  CheckCircle2,
-  AlertCircle,
-  ExternalLink,
 } from "lucide-react";
 
 export default function AccountPage() {
   const router = useRouter();
   const { user, isAuthenticated, isLoading, logout } = useAuth();
   const [orderCount, setOrderCount] = useState(0);
-  const [shopifyInfo, setShopifyInfo] = useState<{
-    configured: boolean;
-    domain?: string;
-    sampleProductCount?: number;
-    status: string;
-  } | null>(null);
-  const [checkingShopify, setCheckingShopify] = useState(false);
 
   useEffect(() => {
     if (user) {
       const userOrders = readOrders(user);
       setOrderCount(userOrders.length);
-
-      // Check Shopify Vercel Integration status
-      setCheckingShopify(true);
-      fetch("/api/shopify/status")
-        .then((res) => res.json())
-        .then((data) => setShopifyInfo(data))
-        .catch(() => setShopifyInfo({ configured: false, status: "error" }))
-        .finally(() => setCheckingShopify(false));
     }
   }, [user]);
 
@@ -99,199 +79,137 @@ export default function AccountPage() {
     user.roles.includes("super_admin") ||
     user.roles.includes("product_operations");
 
+  const accountCards = [
+    {
+      title: "Your Orders",
+      description: "Track, return, or buy things again",
+      icon: Package,
+      href: "/orders",
+      badge: orderCount > 0 ? `${orderCount} order${orderCount === 1 ? "" : "s"}` : undefined,
+    },
+    {
+      title: "Your Cart & Saved",
+      description: "Review items in cart or saved for later",
+      icon: ShoppingCart,
+      href: "/cart",
+    },
+    {
+      title: "Deals & Wishlist",
+      description: "Explore lightning deals and saved products",
+      icon: Heart,
+      href: "/deals",
+    },
+    {
+      title: "Login & Security",
+      description: "Edit name, mobile number, and password",
+      icon: User,
+      href: "#",
+    },
+    {
+      title: "Customer Service",
+      description: "Browse help topics, contact support, or track returns",
+      icon: ShieldCheck,
+      href: "/help",
+    },
+  ];
+
   return (
-    <div className="max-w-3xl mx-auto px-4 py-10 space-y-6">
+    <div className="max-w-[1000px] mx-auto px-4 py-8 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-black text-[#172033]">My account</h1>
-          <p className="text-xs sm:text-sm text-slate-500 mt-0.5">Manage your profile, purchases, and security.</p>
+          <h1 className="text-2xl sm:text-3xl font-bold text-[#0F1111]">Your Account</h1>
+          <p className="text-xs sm:text-sm text-slate-500 mt-0.5">Manage your orders, profile, and security settings.</p>
         </div>
         <button
           onClick={handleSignOut}
-          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-full border border-slate-200 bg-white hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200 text-xs font-bold text-slate-600 transition-all shadow-2xs"
+          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border border-slate-300 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-700 transition-all shadow-xs"
         >
-          <LogOut className="w-3.5 h-3.5" />
-          <span>Sign out</span>
+          <LogOut className="w-3.5 h-3.5 text-slate-500" />
+          <span>Sign Out</span>
         </button>
       </div>
 
-      {/* User profile card */}
-      <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-xs flex items-center gap-4">
-        <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-[#1554D1] to-[#FF7900] text-white font-black text-2xl flex items-center justify-center shrink-0 shadow-md">
-          {user.fullName.charAt(0).toUpperCase()}
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <h2 className="font-black text-lg text-[#172033] truncate">{user.fullName}</h2>
-            {isOperatorOrAdmin && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 text-[#1554D1] text-[10px] font-bold">
-                <ShieldCheck className="w-3 h-3" />
-                <span>Portal Operator</span>
-              </span>
-            )}
+      {/* User summary strip */}
+      <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <div className="w-14 h-14 rounded-full bg-[#232F3E] text-white font-black text-xl flex items-center justify-center shrink-0 shadow-xs">
+            {user.fullName.charAt(0).toUpperCase()}
           </div>
-          <p className="text-xs sm:text-sm text-slate-500 truncate">{user.email}</p>
-          {user.phone && <p className="text-xs text-slate-400 mt-0.5">{user.phone}</p>}
+          <div>
+            <div className="flex items-center gap-2">
+              <h2 className="font-bold text-base text-[#0F1111]">{user.fullName}</h2>
+              {isOperatorOrAdmin && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-blue-50 text-[#007185] text-[10px] font-bold">
+                  <ShieldCheck className="w-3 h-3" />
+                  <span>Portal Operator</span>
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-slate-500">{user.email}</p>
+            {user.phone && <p className="text-xs text-slate-400 mt-0.5">{user.phone}</p>}
+          </div>
         </div>
-      </div>
-
-      {/* Quick stats grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <Link
           href="/orders"
-          className="bg-white rounded-2xl border border-slate-200 p-5 hover:border-[#1554D1]/40 hover:shadow-xs transition-all flex items-center justify-between"
+          className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg bg-[#FFD814] hover:bg-[#F7CA00] border border-[#FCD200] text-xs font-bold text-[#0F1111] shadow-xs transition-colors self-start sm:self-auto"
         >
-          <div>
-            <div className="flex items-center gap-1.5 text-xs text-slate-500 font-semibold mb-1">
-              <Package className="w-4 h-4 text-[#1554D1]" />
-              <span>Purchases</span>
-            </div>
-            <p className="text-2xl font-black text-[#172033]">{orderCount}</p>
-            <p className="text-[11px] text-[#1554D1] font-bold mt-1">View order history →</p>
-          </div>
-        </Link>
-
-        <Link
-          href="/cart"
-          className="bg-white rounded-2xl border border-slate-200 p-5 hover:border-[#1554D1]/40 hover:shadow-xs transition-all flex items-center justify-between"
-        >
-          <div>
-            <div className="flex items-center gap-1.5 text-xs text-slate-500 font-semibold mb-1">
-              <ShoppingCart className="w-4 h-4 text-[#FF7900]" />
-              <span>Cart</span>
-            </div>
-            <p className="text-sm font-bold text-slate-800">Review items</p>
-            <p className="text-[11px] text-[#FF7900] font-bold mt-1">Proceed to checkout →</p>
-          </div>
-        </Link>
-
-        <Link
-          href="/deals"
-          className="bg-white rounded-2xl border border-slate-200 p-5 hover:border-[#1554D1]/40 hover:shadow-xs transition-all flex items-center justify-between"
-        >
-          <div>
-            <div className="flex items-center gap-1.5 text-xs text-slate-500 font-semibold mb-1">
-              <Heart className="w-4 h-4 text-rose-500" />
-              <span>Saved Deals</span>
-            </div>
-            <p className="text-sm font-bold text-slate-800">Flash savings</p>
-            <p className="text-[11px] text-rose-600 font-bold mt-1">Explore discounts →</p>
-          </div>
+          <span>View Your Orders</span>
+          <ArrowRight className="w-3.5 h-3.5" />
         </Link>
       </div>
 
-      {/* Shopify Integration & Multi-Store Status */}
-      <div className="bg-white rounded-3xl border border-slate-200 p-6 shadow-xs space-y-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center">
-              <Store className="w-5 h-5" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="font-bold text-sm text-[#172033]">Shopify Integration (Vercel)</h3>
-                <span className="flex h-2 w-2 relative">
-                  <span
-                    className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
-                      shopifyInfo?.configured ? "bg-emerald-400" : "bg-amber-400"
-                    }`}
-                  />
-                  <span
-                    className={`relative inline-flex rounded-full h-2 w-2 ${
-                      shopifyInfo?.configured ? "bg-emerald-500" : "bg-amber-500"
-                    }`}
-                  />
-                </span>
-              </div>
-              <p className="text-xs text-slate-500">
-                {shopifyInfo?.configured
-                  ? `Connected Store: ${shopifyInfo.domain || "Shopify Storefront"}`
-                  : "Shopify Storefront configuration synchronized from Vercel"}
-              </p>
-            </div>
-          </div>
-
-          <button
-            onClick={() => {
-              setCheckingShopify(true);
-              fetch("/api/shopify/status")
-                .then((r) => r.json())
-                .then((d) => setShopifyInfo(d))
-                .finally(() => setCheckingShopify(false));
-            }}
-            disabled={checkingShopify}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-colors"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${checkingShopify ? "animate-spin text-[#1554D1]" : ""}`} />
-            <span>{checkingShopify ? "Syncing…" : "Sync"}</span>
-          </button>
-        </div>
-
-        <div className="rounded-2xl bg-slate-50 border border-slate-100 p-4 text-xs space-y-2">
-          <div className="flex items-center justify-between">
-            <span className="text-slate-500">Integration Provider</span>
-            <span className="font-bold text-slate-800">Vercel Shopify Integration</span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-slate-500">Storefront API Status</span>
-            <span
-              className={`font-bold flex items-center gap-1 ${
-                shopifyInfo?.configured ? "text-emerald-700" : "text-amber-700"
-              }`}
+      {/* Amazon-style 2-column card grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {accountCards.map((card) => {
+          const Icon = card.icon;
+          return (
+            <Link
+              key={card.title}
+              href={card.href}
+              className="bg-white rounded-xl border border-slate-200 p-5 hover:border-[#E77600] hover:shadow-xs transition-all flex items-start gap-4 group"
             >
-              {shopifyInfo?.configured ? (
-                <>
-                  <CheckCircle2 className="w-3.5 h-3.5" />
-                  <span>Active &amp; Ready</span>
-                </>
-              ) : (
-                <>
-                  <AlertCircle className="w-3.5 h-3.5" />
-                  <span>Configuring Tokens</span>
-                </>
-              )}
-            </span>
-          </div>
-          {shopifyInfo?.domain && (
-            <div className="flex items-center justify-between">
-              <span className="text-slate-500">Store Domain</span>
-              <span className="font-mono text-slate-700">{shopifyInfo.domain}</span>
-            </div>
-          )}
-          {shopifyInfo?.sampleProductCount !== undefined && (
-            <div className="flex items-center justify-between">
-              <span className="text-slate-500">Available Products</span>
-              <span className="font-bold text-slate-800">
-                {shopifyInfo.sampleProductCount > 0
-                  ? `${shopifyInfo.sampleProductCount} synced samples`
-                  : "Ready for catalog sync"}
-              </span>
-            </div>
-          )}
-        </div>
+              <div className="p-3 rounded-lg bg-[#F7F8F8] text-[#232F3E] group-hover:bg-[#FFF8E7] group-hover:text-[#E77600] transition-colors shrink-0">
+                <Icon className="w-6 h-6" />
+              </div>
+              <div className="space-y-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <h3 className="font-bold text-sm text-[#0F1111] group-hover:text-[#007185] transition-colors">
+                    {card.title}
+                  </h3>
+                  {card.badge && (
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-[#FFD814] text-[#0F1111]">
+                      {card.badge}
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-slate-500 leading-snug">{card.description}</p>
+              </div>
+            </Link>
+          );
+        })}
       </div>
 
       {/* Operator shortcuts if privileged */}
       {isOperatorOrAdmin && (
-        <div className="bg-slate-900 text-white rounded-3xl p-6 space-y-3">
+        <div className="bg-[#232F3E] text-white rounded-xl p-6 space-y-3">
           <div className="flex items-center gap-2">
-            <ShieldCheck className="w-5 h-5 text-[#FF7900]" />
-            <h3 className="font-bold text-sm">Administrative Controls</h3>
+            <ShieldCheck className="w-5 h-5 text-[#FF9900]" />
+            <h3 className="font-bold text-sm">Administrative Command Portals</h3>
           </div>
           <p className="text-xs text-slate-300">
             Your account is assigned administrative privileges. Access operational command portals below:
           </p>
-          <div className="flex flex-wrap gap-2 pt-1">
+          <div className="flex flex-wrap gap-3 pt-1">
             <Link
               href="/admin"
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-xs font-bold text-white transition-all"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-xs font-bold text-white transition-all"
             >
               <span>Product Operations Portal (/admin)</span>
               <ArrowRight className="w-3 h-3" />
             </Link>
             <Link
               href="/master-admin"
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#1554D1] hover:bg-[#0E44B0] text-xs font-bold text-white transition-all"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-[#FF9900] hover:bg-[#E08800] text-xs font-bold text-[#0F1111] transition-all"
             >
               <span>Master Admin Control Center (/master-admin)</span>
               <ArrowRight className="w-3 h-3" />

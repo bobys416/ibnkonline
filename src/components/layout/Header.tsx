@@ -2,10 +2,11 @@
 
 import React, { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
+import Image from "next/image";
+import { usePathname, useRouter } from "next/navigation";
 import {
   Search,
   ShoppingCart,
-  User,
   MapPin,
   ChevronDown,
   X,
@@ -14,12 +15,15 @@ import {
   Menu,
   Sparkles,
   Flame,
+  ArrowRight,
+  LogOut,
   Package,
+  User,
+  Check,
 } from "lucide-react";
 import { IbnkLogo } from "@/components/ibnk/IbnkLogo";
 import { useCart } from "@/lib/cart";
-import { formatINRShort } from "@/lib/money";
-import { usePathname, useRouter } from "next/navigation";
+import { useAuth } from "@/lib/auth-context";
 import {
   checkDeliveryServiceability,
   getDeliveryLocationSnapshot,
@@ -30,71 +34,88 @@ import {
   type DeliveryLocation,
 } from "@/lib/delivery-location";
 
-const subNavLinks = [
-  { name: "Deals & Offers", href: "/deals", highlight: true, icon: Flame },
-  { name: "Grocery", href: "/categories/grocery" },
-  { name: "Electronics", href: "/categories/electronics" },
-  { name: "Fashion", href: "/categories/fashion" },
-  { name: "Home Essentials", href: "/categories/home" },
-  { name: "Spring Savings", href: "/spring-savings", spark: true },
-  { name: "Baby", href: "/categories/baby" },
-  { name: "Patio & Garden", href: "/categories/patio-garden" },
+// Category options for the Amazon-style "All ▾" search select
+const SEARCH_CATEGORIES = [
+  { id: "all", label: "All Categories" },
+  { id: "deals", label: "Deals" },
+  { id: "electronics", label: "Electronics" },
+  { id: "grocery", label: "Grocery & Gourmet" },
+  { id: "fashion", label: "Fashion & Apparel" },
+  { id: "home", label: "Home & Kitchen" },
+  { id: "beauty", label: "Beauty" },
+  { id: "toys", label: "Toys & Games" },
+  { id: "baby", label: "Baby" },
 ];
 
-function CategoryNavigationLinks({ pathname }: { pathname: string | null }) {
-  return (
-    <>
-      {subNavLinks.map((link) => {
-        const IconComponent = link.icon;
-        const isActive = pathname === link.href || pathname?.startsWith(`${link.href}/`);
-        return (
-          <Link
-            key={link.name}
-            href={link.href}
-            aria-current={isActive ? "page" : undefined}
-            className={`flex shrink-0 items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold transition-colors hover:bg-white hover:shadow-2xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1554D1] focus-visible:ring-offset-1 ${
-              isActive
-                ? "bg-blue-50 font-bold text-[#1554D1]"
-                : link.highlight
-                  ? "bg-orange-50 font-bold text-[#B54708] hover:bg-orange-100"
-                  : link.spark
-                    ? "bg-blue-50 font-bold text-[#1554D1] hover:bg-blue-100"
-                    : "text-slate-700 hover:text-[#172033]"
-            }`}
-          >
-            {IconComponent && <IconComponent className="h-3 w-3 shrink-0" />}
-            {link.spark && <Sparkles className="h-3 w-3 shrink-0 text-[#1554D1]" />}
-            <span>{link.name}</span>
-          </Link>
-        );
-      })}
-    </>
-  );
-}
+// Subnav links exactly matching the Amazon India reference
+const SUB_NAV_ITEMS = [
+  { label: "Today's Deals", href: "/deals" },
+  { label: "Coupons", href: "/deals" },
+  { label: "Hotel Booking", href: "/categories" },
+  { label: "Mobiles", href: "/categories/electronics" },
+  { label: "Fresh", href: "/categories/grocery" },
+  { label: "Grocery & Gourmet Foods", href: "/categories/grocery" },
+  { label: "Gift Cards", href: "/deals" },
+  { label: "Flights", href: "/categories" },
+  { label: "Electronics", href: "/categories/electronics" },
+  { label: "Keep Shopping for", href: "/products" },
+  { label: "Gift Ideas", href: "/deals" },
+  { label: "Bestsellers", href: "/categories/electronics" },
+  { label: "Buy Again", href: "/orders" },
+  { label: "Sell", href: "/sell" },
+];
 
-function ActiveCategoryNavigation() {
-  const pathname = usePathname();
-  return <CategoryNavigationLinks pathname={pathname} />;
-}
-
-import { useAuth } from "@/lib/auth-context";
+// Catalog departments for the slide-out drawer
+const DEPARTMENTS = [
+  { name: "Grocery & Gourmet Foods", icon: "🍎", href: "/categories/grocery" },
+  { name: "Electronics & Tech", icon: "📱", href: "/categories/electronics" },
+  { name: "Mobiles & Accessories", icon: "📞", href: "/categories/electronics" },
+  { name: "Home & Kitchen", icon: "🛋️", href: "/categories/home" },
+  { name: "Fashion & Apparel", icon: "👗", href: "/categories/fashion" },
+  { name: "Baby & Nursery", icon: "🍼", href: "/categories/baby" },
+  { name: "Toys & Games", icon: "🎮", href: "/categories/toys" },
+  { name: "Beauty & Grooming", icon: "✨", href: "/categories/beauty" },
+  { name: "Sports & Outdoors", icon: "⚽", href: "/categories/sports" },
+  { name: "Patio & Garden", icon: "🌱", href: "/categories/patio-garden" },
+  { name: "Automotive & Tools", icon: "🚗", href: "/categories/auto" },
+];
 
 export function Header() {
-  const { user, isAuthenticated, logout } = useAuth();
-  const [searchQuery, setSearchQuery] = useState("");
-  const { itemCount, totalPaise } = useCart();
+  const pathname = usePathname();
   const router = useRouter();
+  const { user, isAuthenticated, logout } = useAuth();
+  const { itemCount } = useCart();
+
+  // Search state
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("all");
+  const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState(false);
+  const categoryDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Flyout and drawer menus
+  const [isDepartmentsOpen, setIsDepartmentsOpen] = useState(false);
+  const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
+  const [isLangMenuOpen, setIsLangMenuOpen] = useState(false);
+  const accountMenuRef = useRef<HTMLDivElement>(null);
+  const langMenuRef = useRef<HTMLDivElement>(null);
+
+  // Delivery Location modal
   const [isFulfillmentOpen, setIsFulfillmentOpen] = useState(false);
   const [zipCodeInput, setZipCodeInput] = useState<string | null>(null);
   const [locationPreview, setLocationPreview] = useState<DeliveryLocation | null>(null);
   const [isDetectingLocation, setIsDetectingLocation] = useState(false);
+  const [locationMessage, setLocationMessage] = useState("");
+  const [locationMessageType, setLocationMessageType] = useState<"error" | "success" | "info">("info");
+  const [isCheckingLocation, setIsCheckingLocation] = useState(false);
   const locationModalRef = useRef<HTMLDivElement>(null);
   const locationTriggerRef = useRef<HTMLButtonElement>(null);
+
   const locationSnapshot = useSyncExternalStore(
     subscribeToDeliveryLocation,
     getDeliveryLocationSnapshot,
     () => null
   );
+
   const { savedLocation, savedLocationError } = useMemo(() => {
     try {
       return { savedLocation: parseDeliveryLocation(locationSnapshot), savedLocationError: "" };
@@ -105,12 +126,27 @@ export function Header() {
       };
     }
   }, [locationSnapshot]);
-  const zipCode = zipCodeInput ?? savedLocation?.pinCode ?? "";
-  const [locationMessage, setLocationMessage] = useState("");
-  const [locationMessageType, setLocationMessageType] = useState<"error" | "success" | "info">("info");
-  const [isCheckingLocation, setIsCheckingLocation] = useState(false);
-  const [isDepartmentsOpen, setIsDepartmentsOpen] = useState(false);
 
+  const zipCode = zipCodeInput ?? savedLocation?.pinCode ?? "";
+
+  // Close popups on click outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (accountMenuRef.current && !accountMenuRef.current.contains(event.target as Node)) {
+        setIsAccountMenuOpen(false);
+      }
+      if (categoryDropdownRef.current && !categoryDropdownRef.current.contains(event.target as Node)) {
+        setIsCategoryDropdownOpen(false);
+      }
+      if (langMenuRef.current && !langMenuRef.current.contains(event.target as Node)) {
+        setIsLangMenuOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  // Escape key for location modal
   useEffect(() => {
     if (!isFulfillmentOpen) return;
     const locationTrigger = locationTriggerRef.current;
@@ -125,19 +161,28 @@ export function Header() {
     };
   }, [isFulfillmentOpen]);
 
-  const departments = [
-    { name: "Grocery & Essentials", icon: "🍎", href: "/categories/grocery" },
-    { name: "Electronics & Tech", icon: "📱", href: "/categories/electronics" },
-    { name: "Home & Appliances", icon: "🛋️", href: "/categories/home" },
-    { name: "Fashion & Apparel", icon: "👗", href: "/categories/fashion" },
-    { name: "Baby & Nursery", icon: "🍼", href: "/categories/baby" },
-    { name: "Toys & Games", icon: "🎮", href: "/categories/toys" },
-    { name: "Beauty & Grooming", icon: "✨", href: "/categories/beauty" },
-    { name: "Patio & Garden", icon: "🌱", href: "/categories/patio-garden" },
-    { name: "Sports & Outdoors", icon: "⚽", href: "/categories/sports" },
-    { name: "Automotive & Tools", icon: "🚗", href: "/categories/auto" },
-  ];
+  // Execute Search
+  const handleSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const q = searchQuery.trim();
+    if (q) {
+      if (selectedCategory && selectedCategory !== "all") {
+        router.push(`/search?q=${encodeURIComponent(q)}&category=${encodeURIComponent(selectedCategory)}`);
+      } else {
+        router.push(`/search?q=${encodeURIComponent(q)}`);
+      }
+    } else {
+      if (selectedCategory === "deals") {
+        router.push("/deals");
+      } else if (selectedCategory && selectedCategory !== "all") {
+        router.push(`/categories/${selectedCategory}`);
+      } else {
+        router.push("/products");
+      }
+    }
+  };
 
+  // PIN code verification
   async function checkDeliveryPinCode() {
     if (!/^[1-9]\d{5}$/.test(zipCode)) {
       setLocationMessage("Enter a valid 6-digit Indian PIN code.");
@@ -146,7 +191,7 @@ export function Header() {
     }
 
     setIsCheckingLocation(true);
-    setLocationMessage("Verifying PIN code coverage...");
+    setLocationMessage("Verifying PIN coverage...");
     setLocationMessageType("info");
     try {
       const result = await checkDeliveryServiceability(zipCode);
@@ -164,7 +209,7 @@ export function Header() {
                 state: result.state || "",
                 pinCode: zipCode,
                 displayName: [result.area, result.city, result.state].filter(Boolean).join(", "),
-                serviceability: serviceability,
+                serviceability,
               };
 
       const updatedLocation = {
@@ -182,7 +227,9 @@ export function Header() {
         setLocationMessageType("error");
       } else {
         const placeName = [updatedLocation.city, updatedLocation.state].filter(Boolean).join(", ");
-        setLocationMessage(`Delivery confirmed for ${placeName ? placeName + " (" + zipCode + ")" : "PIN " + zipCode}. Click "Use this location" below.`);
+        setLocationMessage(
+          `Delivery confirmed for ${placeName ? placeName + " (" + zipCode + ")" : "PIN " + zipCode}. Click "Use this location" below.`
+        );
         setLocationMessageType("success");
       }
     } catch (error) {
@@ -195,27 +242,10 @@ export function Header() {
     }
   }
 
+  // Device Geolocation
   function detectMyLocation() {
-    // Objective 3: Explicit insecure-origin detection for local LAN development
-    const isLocalLanInsecure =
-      !window.isSecureContext &&
-      window.location.hostname !== "localhost" &&
-      window.location.hostname !== "127.0.0.1";
-
-    if (isLocalLanInsecure) {
-      setLocationMessage(
-        "Device location requires a secure origin (HTTPS). You are currently connected via an HTTP IP address (" +
-          window.location.hostname +
-          "). Open http://localhost:3000 on this machine, or enter your PIN code manually below."
-      );
-      setLocationMessageType("error");
-      return;
-    }
-
     if (!window.isSecureContext) {
-      setLocationMessage(
-        "Location detection requires a secure HTTPS connection or localhost. Please enter your 6-digit PIN code manually."
-      );
+      setLocationMessage("Location detection requires HTTPS or localhost. Enter PIN code manually.");
       setLocationMessageType("error");
       return;
     }
@@ -254,9 +284,7 @@ export function Header() {
           }
         } catch (error) {
           setLocationMessage(
-            error instanceof Error
-              ? error.message
-              : "Could not resolve address from coordinates. Enter your PIN code manually."
+            error instanceof Error ? error.message : "Could not resolve address from coordinates. Enter PIN code manually."
           );
           setLocationMessageType("error");
         } finally {
@@ -268,8 +296,8 @@ export function Header() {
           error.code === error.PERMISSION_DENIED
             ? "Location permission was denied. You can enter your 6-digit PIN code manually below."
             : error.code === error.POSITION_UNAVAILABLE
-              ? "Your device could not acquire satellite/network position. Please enter your PIN code manually."
-              : "Location detection timed out. Please try again or enter your PIN code manually.";
+              ? "Your device could not acquire position. Please enter your PIN code manually."
+              : "Location detection timed out. Please enter your PIN code manually.";
         setLocationMessage(message);
         setLocationMessageType("info");
         setIsDetectingLocation(false);
@@ -285,370 +313,567 @@ export function Header() {
       setIsFulfillmentOpen(false);
     } catch (error) {
       setLocationMessage(
-        error instanceof Error
-          ? error.message
-          : "Could not save location to browser storage. You can continue at checkout."
+        error instanceof Error ? error.message : "Could not save location to browser storage."
       );
       setLocationMessageType("error");
     }
   }
 
+  // Display user name or default
+  const deliverToName = user?.fullName ? user.fullName.split(" ")[0] : "Rishabh";
+  const displayLocation = savedLocation
+    ? `${savedLocation.city || "Gorakhpur"} ${savedLocation.pinCode || "273015"}`
+    : "Gorakhpur 273015";
+
+  const currentCategoryLabel =
+    SEARCH_CATEGORIES.find((c) => c.id === selectedCategory)?.label || "All";
+
   return (
-    <header className="sticky top-0 z-40 isolate w-full bg-white">
-      {/* The utility row stays opaque so scrolling content cannot show through it. */}
-      <div className="border-b border-slate-200 bg-white px-3 py-2.5 sm:px-6">
-        <div className="mx-auto flex min-h-[58px] max-w-[1440px] items-center gap-1 sm:gap-4 lg:gap-6">
-          {/* Authentic Brand Logo - Unconstrained & Responsive */}
-          <Link
-            href="/"
-            className="group shrink-0 select-none rounded-md py-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1554D1] focus-visible:ring-offset-2"
-            title="iBNK Home"
-          >
-            <div className="hidden sm:flex items-center">
-              <IbnkLogo variant="color" className="h-9 sm:h-10 w-auto" width={140} height={84} priority />
-            </div>
-            <div className="flex sm:hidden items-center">
-              <IbnkLogo variant="compact" className="h-8 w-auto" width={95} height={48} priority />
-            </div>
-          </Link>
+    <header className="sticky top-0 z-40 w-full select-none shadow-sm">
+      {/* ======================================================== */}
+      {/* 1. Main Navigation Bar (Clean White & Light Grey Style)  */}
+      {/* ======================================================== */}
+      <div className="bg-white border-b border-gray-200 text-gray-800 px-2 sm:px-4 py-1.5 flex items-center justify-between gap-1 sm:gap-3 text-xs shadow-2xs">
+        {/* Left 1: Authentic iBNK Full Color Logo */}
+        <Link
+          href="/"
+          className="shrink-0 flex items-center px-2 py-1 border border-transparent hover:border-gray-300 rounded-sm hover:bg-gray-50 transition-colors"
+          title="iBNK Home"
+        >
+          <IbnkLogo variant="color" className="h-7 sm:h-8 w-auto" width={110} height={40} priority />
+        </Link>
 
-          {/* Location Selector Pill */}
-          <button
-            ref={locationTriggerRef}
-            onClick={() => {
-              setLocationPreview(savedLocation);
-              setZipCodeInput(savedLocation?.pinCode ?? null);
-              setLocationMessage("");
-              setIsFulfillmentOpen(true);
-            }}
-            className="glass-pill flex shrink-0 items-center gap-2 rounded-full px-2 py-1.5 text-left text-xs text-[#172033] transition-colors hover:border-[#1554D1] sm:px-3"
-            aria-label="Select delivery destination"
-          >
-            <div className="w-6 h-6 rounded-full bg-orange-50 text-[#FF7900] flex items-center justify-center shrink-0">
-              <MapPin className="h-3.5 w-3.5" />
-            </div>
-            <div className="hidden sm:block min-w-0 max-w-[140px]">
-              <span className="block text-[10px] font-semibold uppercase tracking-wider text-[#475569]">
-                Deliver to
-              </span>
-              <span className="block truncate text-xs font-bold text-[#172033]">
-                {savedLocation
-                  ? `${savedLocation.city || savedLocation.state || "India"} ${savedLocation.pinCode}`
-                  : "Set Location"}
-              </span>
-            </div>
-          </button>
+        {/* Left 2: Deliver to [Name / Location PIN] */}
+        <button
+          ref={locationTriggerRef}
+          type="button"
+          onClick={() => {
+            setLocationPreview(savedLocation);
+            setZipCodeInput(savedLocation?.pinCode ?? null);
+            setLocationMessage("");
+            setIsFulfillmentOpen(true);
+          }}
+          className="hidden sm:flex items-center gap-1.5 px-2 py-1.5 border border-transparent hover:border-gray-300 rounded-sm hover:bg-gray-50 text-left transition-colors cursor-pointer shrink-0"
+          title="Change delivery location"
+        >
+          <MapPin className="w-4 h-4 text-[#FF7900] shrink-0 mt-2" />
+          <div className="leading-tight">
+            <span className="text-gray-500 text-[11px] block">Deliver to {deliverToName}</span>
+            <span className="text-gray-900 text-xs font-black block truncate max-w-[130px]">
+              {displayLocation}
+            </span>
+          </div>
+        </button>
 
-          {/* Search stays a solid, high-contrast control within the utility row. */}
-          <div className="relative min-w-0 flex-1 max-w-2xl">
-            <form
-              className="relative flex h-10 sm:h-11 items-center overflow-hidden rounded-full border border-[#D1D5DB] bg-white shadow-xs transition-colors focus-within:border-[#1554D1] focus-within:ring-2 focus-within:ring-[#1554D1]/25"
-              onSubmit={(e) => {
-                e.preventDefault();
-                const q = searchQuery.trim();
-                router.push(q ? `/search?q=${encodeURIComponent(q)}` : "/products");
-              }}
-            >
-              <Search className="ml-3 h-4 w-4 shrink-0 text-[#475569] sm:ml-3.5" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search across electronics, fashion, grocery & essentials..."
-                className="h-full min-w-0 flex-1 bg-white px-2 text-xs text-[#172033] outline-none placeholder:text-[#475569] sm:px-3 sm:text-sm"
-              />
+        {/* Center: Search Bar with Grey Border & Orange Submit Button */}
+        <div className="flex-1 max-w-3xl mx-1 sm:mx-3 relative">
+          <form
+            onSubmit={handleSearchSubmit}
+            className="flex h-10 w-full rounded-md overflow-hidden bg-white border border-gray-300 shadow-2xs focus-within:ring-2 focus-within:ring-[#febd69] focus-within:border-[#febd69]"
+          >
+            {/* Category Dropdown Pill */}
+            <div className="relative shrink-0" ref={categoryDropdownRef}>
               <button
-                type="submit"
-                className="flex h-full shrink-0 items-center justify-center bg-[#FF7900] px-2 text-xs font-bold text-[#172033] transition-colors hover:bg-[#E06A00] focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#172033] sm:px-4"
-                aria-label="Search"
+                type="button"
+                onClick={() => setIsCategoryDropdownOpen(!isCategoryDropdownOpen)}
+                className="h-full bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-medium px-2.5 sm:px-3 flex items-center gap-1 border-r border-gray-300 transition-colors cursor-pointer"
               >
-                Search
+                <span className="max-w-[70px] sm:max-w-[100px] truncate">{currentCategoryLabel === "All Categories" ? "All" : currentCategoryLabel}</span>
+                <ChevronDown className="w-3 h-3 text-gray-600" />
               </button>
-            </form>
+
+              {isCategoryDropdownOpen && (
+                <div className="absolute left-0 top-full mt-1 w-48 bg-white border border-gray-300 rounded shadow-xl py-1 z-50 text-xs text-gray-800 animate-in fade-in zoom-in-95 duration-100 max-h-72 overflow-y-auto">
+                  {SEARCH_CATEGORIES.map((cat) => (
+                    <button
+                      key={cat.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedCategory(cat.id);
+                        setIsCategoryDropdownOpen(false);
+                      }}
+                      className={`w-full text-left px-3 py-1.5 hover:bg-blue-600 hover:text-white flex items-center justify-between ${
+                        selectedCategory === cat.id ? "bg-blue-50 font-bold text-blue-700" : ""
+                      }`}
+                    >
+                      <span>{cat.label}</span>
+                      {selectedCategory === cat.id && <Check className="w-3.5 h-3.5" />}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Main Input */}
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search Amazon.in"
+              className="w-full px-3 text-sm text-gray-900 placeholder:text-gray-400 outline-none h-full bg-white min-w-0"
+            />
+
+            {/* Search Submit Button */}
+            <button
+              type="submit"
+              className="bg-[#febd69] hover:bg-[#f3a847] text-gray-950 px-4 sm:px-5 h-full flex items-center justify-center shrink-0 transition-colors cursor-pointer"
+              aria-label="Search"
+            >
+              <Search className="w-5 h-5 text-gray-900 stroke-[2.5]" />
+            </button>
+          </form>
+        </div>
+
+        {/* Right Section Controls */}
+        <div className="flex items-center gap-0.5 sm:gap-1 shrink-0">
+          {/* Language Selector: 🇮🇳 EN ▾ */}
+          <div className="relative hidden md:block" ref={langMenuRef}>
+            <button
+              type="button"
+              onClick={() => setIsLangMenuOpen(!isLangMenuOpen)}
+              className="flex items-center gap-1 px-2 py-2 border border-transparent hover:border-gray-300 rounded-sm hover:bg-gray-50 transition-colors cursor-pointer text-gray-800 font-bold"
+            >
+              <span className="text-base leading-none">🇮🇳</span>
+              <span className="text-xs">EN</span>
+              <ChevronDown className="w-2.5 h-2.5 text-gray-500 -ml-0.5" />
+            </button>
           </div>
 
-          {/* Right Header Navigation Icons / Controls */}
-          <div className="flex shrink-0 items-center gap-1 sm:gap-2">
-            {isAuthenticated && user ? (
-              <Link
-                href="/account"
-                className="hidden items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold text-[#172033] transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1554D1] sm:flex"
-              >
-                <div className="w-7 h-7 rounded-full bg-[#1554D1] text-white font-bold text-xs flex items-center justify-center">
-                  {user.fullName.charAt(0).toUpperCase()}
-                </div>
-                <div className="text-left leading-tight hidden lg:block">
-                  <span className="block text-[10px] font-medium text-slate-500">
-                    Hello, {user.fullName.split(" ")[0]}
-                  </span>
-                  <span className="font-bold text-[#1554D1]">My Account</span>
-                </div>
-                <ChevronDown className="hidden h-3.5 w-3.5 text-[#475569] lg:block" aria-hidden="true" />
-              </Link>
-            ) : (
-              <Link
-                href="/login"
-                className="hidden items-center gap-2 rounded-full px-3 py-1.5 text-xs font-semibold text-[#172033] transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1554D1] sm:flex"
-              >
-                <div className="w-7 h-7 rounded-full bg-blue-50 text-[#1554D1] flex items-center justify-center">
-                  <User className="h-4 w-4" />
-                </div>
-                <div className="text-left leading-tight hidden lg:block">
-                  <span className="block text-[10px] font-medium text-[#475569]">Hello, Sign In</span>
-                  <span className="font-bold">Account</span>
-                </div>
-                <ChevronDown className="hidden h-3.5 w-3.5 text-[#475569] lg:block" aria-hidden="true" />
-              </Link>
-            )}
-
-            <Link
-              href="/orders"
-              className="hidden items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-bold text-[#172033] transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1554D1] md:flex"
+          {/* Account & Lists */}
+          <div className="relative" ref={accountMenuRef}>
+            <button
+              type="button"
+              onClick={() => setIsAccountMenuOpen(!isAccountMenuOpen)}
+              className="px-2 py-1.5 border border-transparent hover:border-gray-300 rounded-sm hover:bg-gray-50 text-left transition-colors cursor-pointer flex flex-col justify-center leading-tight"
             >
-              <Package className="h-4 w-4 text-[#475569]" />
-              <span>Orders</span>
-            </Link>
-
-            {/* Shopping Cart Pill */}
-            <Link
-              href="/cart"
-              className="flex shrink-0 items-center gap-1.5 rounded-full bg-[#1554D1] px-2.5 py-2 text-xs font-bold text-white shadow-sm transition-colors hover:bg-[#0E44B0] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1554D1] focus-visible:ring-offset-2 active:scale-95 sm:gap-2 sm:px-3.5"
-              aria-label={`Cart with ${itemCount} items`}
-              suppressHydrationWarning
-            >
-              <div className="relative">
-                <ShoppingCart className="h-4 w-4 text-white" />
-                {itemCount > 0 && (
-                  <span className="absolute -top-2 -right-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-[#FF7900] px-1 text-[10px] font-black text-[#172033] shadow-xs" suppressHydrationWarning>
-                    {itemCount}
-                  </span>
-                )}
-              </div>
-              <span className="hidden sm:inline" suppressHydrationWarning>
-                {totalPaise > 0 ? formatINRShort(totalPaise) : "Cart"}
+              <span className="text-gray-500 text-[11px] block">
+                Hello, {isAuthenticated && user ? user.fullName.split(" ")[0] : "sign in"}
               </span>
-            </Link>
-          </div>
-        </div>
-      </div>
+              <span className="text-gray-900 text-xs font-bold flex items-center gap-0.5">
+                Account &amp; Lists
+                <ChevronDown className="w-2.5 h-2.5 text-gray-500" />
+              </span>
+            </button>
 
-      {/* The category tray gets the subtle glass treatment; the utility controls remain solid. */}
-      <div className="glass-surface backdrop-blur-sm border-b border-slate-200 px-3 py-1.5 sm:px-6">
-        <div className="mx-auto flex max-w-[1440px] items-center gap-2 sm:gap-3">
-          {/* All Departments Toggle Button */}
-          <button
-            onClick={() => setIsDepartmentsOpen(!isDepartmentsOpen)}
-            className="flex shrink-0 items-center gap-1.5 rounded-full border border-[#D1D5DB] bg-white px-2.5 py-1.5 text-xs font-bold text-[#172033] shadow-2xs transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1554D1] focus-visible:ring-offset-1 sm:px-3"
-            aria-label={isDepartmentsOpen ? "Close all departments" : "Open all departments"}
-            aria-expanded={isDepartmentsOpen}
-            aria-controls="ibnk-departments-drawer"
-          >
-            <Menu className="h-3.5 w-3.5 text-[#1554D1]" />
-            <span className="hidden sm:inline">All Departments</span>
-            <span className="sm:hidden">Departments</span>
-          </button>
-
-          {/* Horizontally Scrollable Dock Pills */}
-          <nav aria-label="Product categories" className="scrollbar-none flex min-w-0 flex-1 items-center gap-1.5 overflow-x-auto py-0.5">
-            <React.Suspense fallback={<CategoryNavigationLinks pathname={null} />}>
-              <ActiveCategoryNavigation />
-            </React.Suspense>
-          </nav>
-        </div>
-      </div>
-
-      {/* Departments Drawer with Frosted Glass Backdrop */}
-      {isDepartmentsOpen && (
-        <div id="ibnk-departments-drawer" className="fixed inset-0 z-50 flex bg-[#172033]/40 backdrop-blur-sm">
-          <div className="flex h-full w-full max-w-sm flex-col bg-white text-[#172033] shadow-2xl animate-in slide-in-from-left duration-200 sm:max-w-md">
-            <div className="p-5 bg-gradient-to-r from-[#172033] to-[#1554D1] text-white flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <IbnkLogo variant="white" className="h-7 w-auto" width={95} height={57} />
-                <span className="font-bold text-base">All Departments</span>
-              </div>
-              <button
-                onClick={() => setIsDepartmentsOpen(false)}
-                className="rounded-full p-1.5 text-white transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
-                aria-label="Close departments menu"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="p-4 overflow-y-auto flex-1 space-y-1 divide-y divide-slate-100">
-              {/* User Account Bar for Mobile */}
-              <div className="pb-3">
-                {isAuthenticated && user ? (
-                  <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-8 h-8 rounded-full bg-[#1554D1] text-white font-bold text-xs flex items-center justify-center shrink-0">
-                        {user.fullName.charAt(0).toUpperCase()}
-                      </div>
-                      <div className="min-w-0 flex-1 leading-tight">
-                        <p className="font-bold text-xs text-[#172033] truncate">{user.fullName}</p>
-                        <p className="text-[10px] text-slate-500 truncate">{user.email}</p>
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-200/60 text-[11px] font-bold">
+            {/* Account Flyout Dropdown */}
+            {isAccountMenuOpen && (
+              <div className="absolute right-0 top-full mt-1 w-64 bg-white border border-gray-200 rounded shadow-2xl p-3 z-50 text-xs text-gray-800 animate-in fade-in zoom-in-95 duration-150">
+                {!isAuthenticated ? (
+                  <div className="text-center pb-3 border-b border-gray-200 space-y-2">
+                    <Link
+                      href="/login"
+                      onClick={() => setIsAccountMenuOpen(false)}
+                      className="block w-full py-2 rounded bg-gradient-to-b from-[#f7dfa5] to-[#f0c14b] hover:from-[#f5d78e] hover:to-[#eeb933] border border-[#a88734] text-[#111] font-bold shadow-xs transition-all"
+                    >
+                      Sign In
+                    </Link>
+                    <p className="text-[11px] text-gray-600">
+                      New customer?{" "}
                       <Link
-                        href="/account"
-                        onClick={() => setIsDepartmentsOpen(false)}
-                        className="text-center py-1.5 rounded-lg bg-white border border-slate-200 hover:bg-slate-100 text-[#172033]"
+                        href="/register"
+                        onClick={() => setIsAccountMenuOpen(false)}
+                        className="text-[#007185] hover:text-[#C7511F] hover:underline"
                       >
-                        Account
+                        Start here.
                       </Link>
-                      <Link
-                        href="/orders"
-                        onClick={() => setIsDepartmentsOpen(false)}
-                        className="text-center py-1.5 rounded-lg bg-[#1554D1] text-white hover:bg-[#0E44B0]"
-                      >
-                        My Orders
-                      </Link>
-                    </div>
+                    </p>
                   </div>
                 ) : (
-                  <div className="p-3 rounded-2xl bg-blue-50/70 border border-blue-100 space-y-2">
-                    <p className="text-xs font-bold text-[#172033]">Welcome to iBNK Marketplace</p>
-                    <p className="text-[11px] text-slate-600">Sign in to track orders and view saved items.</p>
-                    <div className="grid grid-cols-2 gap-2 pt-1">
+                  <div className="pb-3 border-b border-gray-200 flex items-center justify-between">
+                    <div>
+                      <p className="font-bold text-gray-900">{user?.fullName}</p>
+                      <p className="text-[10px] text-gray-500 truncate max-w-[150px]">{user?.email}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        setIsAccountMenuOpen(false);
+                        await logout();
+                        router.push("/login");
+                      }}
+                      className="flex items-center gap-1 text-[11px] font-bold text-rose-600 hover:underline"
+                    >
+                      <LogOut className="w-3 h-3" />
+                      <span>Sign Out</span>
+                    </button>
+                  </div>
+                )}
+
+                <div className="pt-2 space-y-1.5 text-gray-700">
+                  <div className="font-bold text-gray-900 text-[11px] uppercase tracking-wider mb-1">
+                    Your Account
+                  </div>
+                  <Link
+                    href="/account"
+                    onClick={() => setIsAccountMenuOpen(false)}
+                    className="block py-1 hover:text-[#C7511F] hover:underline"
+                  >
+                    Your Account
+                  </Link>
+                  <Link
+                    href="/orders"
+                    onClick={() => setIsAccountMenuOpen(false)}
+                    className="block py-1 hover:text-[#C7511F] hover:underline"
+                  >
+                    Your Orders
+                  </Link>
+                  <Link
+                    href="/deals"
+                    onClick={() => setIsAccountMenuOpen(false)}
+                    className="block py-1 hover:text-[#C7511F] hover:underline"
+                  >
+                    Your Wish List &amp; Deals
+                  </Link>
+                  <Link
+                    href="/help"
+                    onClick={() => setIsAccountMenuOpen(false)}
+                    className="block py-1 hover:text-[#C7511F] hover:underline"
+                  >
+                    Customer Service
+                  </Link>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Returns & Orders */}
+          <Link
+            href="/orders"
+            className="hidden sm:flex flex-col justify-center px-2 py-1.5 border border-transparent hover:border-gray-300 rounded-sm hover:bg-gray-50 leading-tight transition-colors"
+          >
+            <span className="text-gray-500 text-[11px] block">Returns</span>
+            <span className="text-gray-900 text-xs font-bold block">&amp; Orders</span>
+          </Link>
+
+          {/* Cart Icon with Orange Badge */}
+          <Link
+            href="/cart"
+            className="flex items-end px-2.5 py-1.5 border border-transparent hover:border-gray-300 rounded-sm hover:bg-gray-50 transition-colors relative cursor-pointer group"
+            aria-label={`Cart with ${itemCount} items`}
+          >
+            <div className="relative">
+              {/* Badge counter */}
+              <span className="absolute -top-2 left-3 font-black text-xs text-[#f08804] min-w-4 text-center">
+                {itemCount}
+              </span>
+              <ShoppingCart className="w-7 h-7 text-gray-900" />
+            </div>
+            <span className="text-gray-900 text-sm font-bold hidden sm:inline leading-none mb-0.5 ml-1">
+              Cart
+            </span>
+          </Link>
+        </div>
+      </div>
+
+      {/* ======================================================== */}
+      {/* 2. Sub Navigation Bar (Light Grey #F3F4F6 Style)          */}
+      {/* ======================================================== */}
+      <div className="bg-[#F3F4F6] border-b border-gray-200 text-gray-700 px-2 sm:px-4 flex items-center h-[39px] text-[13px] font-medium overflow-x-auto no-scrollbar gap-0.5">
+        {/* All Departments Toggle Button */}
+        <button
+          type="button"
+          onClick={() => setIsDepartmentsOpen(true)}
+          className="flex items-center gap-1.5 px-2.5 py-1 border border-transparent hover:border-gray-300 hover:bg-white rounded-sm whitespace-nowrap cursor-pointer shrink-0 font-bold text-gray-900 transition-colors"
+        >
+          <Menu className="w-5 h-5 text-gray-800" />
+          <span>All</span>
+        </button>
+
+        {/* Subnav links */}
+        {SUB_NAV_ITEMS.map((item) => {
+          const isActive = pathname === item.href;
+          return (
+            <Link
+              key={item.label}
+              href={item.href}
+              className={`px-2.5 py-1 border border-transparent hover:border-gray-300 hover:bg-white rounded-sm whitespace-nowrap cursor-pointer shrink-0 transition-colors ${
+                isActive ? "text-[#1554D1] font-bold bg-white border-gray-200 shadow-2xs" : "text-gray-700 hover:text-gray-950"
+              }`}
+            >
+              {item.label}
+            </Link>
+          );
+        })}
+      </div>
+
+      {/* ======================================================== */}
+      {/* 3. Slide-in Departments Drawer                            */}
+      {/* ======================================================== */}
+      {isDepartmentsOpen && (
+        <div className="fixed inset-0 z-50 flex">
+          {/* Backdrop */}
+          <div
+            className="fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity"
+            onClick={() => setIsDepartmentsOpen(false)}
+          />
+
+          {/* Drawer content */}
+          <div className="relative z-10 w-full max-w-xs sm:max-w-sm bg-white text-gray-900 h-full flex flex-col shadow-2xl animate-in slide-in-from-left duration-200">
+            {/* Drawer Header */}
+            <div className="bg-gray-900 text-white p-4 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
+                  <User className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-sm">
+                    Hello, {isAuthenticated && user ? user.fullName : "Sign In"}
+                  </h3>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsDepartmentsOpen(false)}
+                className="text-gray-300 hover:text-white p-1 rounded"
+                aria-label="Close menu"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            {/* Drawer Body */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 text-sm divide-y divide-gray-200">
+              {/* Trending */}
+              <div className="space-y-2">
+                <h4 className="font-bold text-gray-900 uppercase text-xs tracking-wider">
+                  Trending
+                </h4>
+                <ul className="space-y-1.5 text-gray-700">
+                  <li>
+                    <Link
+                      href="/deals"
+                      onClick={() => setIsDepartmentsOpen(false)}
+                      className="flex items-center justify-between py-1 hover:text-[#C7511F]"
+                    >
+                      <span>Today&apos;s Deals &amp; Offers</span>
+                      <Flame className="w-4 h-4 text-amber-500" />
+                    </Link>
+                  </li>
+                  <li>
+                    <Link
+                      href="/categories/electronics"
+                      onClick={() => setIsDepartmentsOpen(false)}
+                      className="block py-1 hover:text-[#C7511F]"
+                    >
+                      Bestsellers
+                    </Link>
+                  </li>
+                  <li>
+                    <Link
+                      href="/products"
+                      onClick={() => setIsDepartmentsOpen(false)}
+                      className="block py-1 hover:text-[#C7511F]"
+                    >
+                      New Releases
+                    </Link>
+                  </li>
+                </ul>
+              </div>
+
+              {/* Shop by Department */}
+              <div className="pt-3 space-y-2">
+                <h4 className="font-bold text-gray-900 uppercase text-xs tracking-wider">
+                  Shop by Department
+                </h4>
+                <ul className="space-y-1 text-gray-700">
+                  {DEPARTMENTS.map((dept) => (
+                    <li key={dept.name}>
+                      <Link
+                        href={dept.href}
+                        onClick={() => setIsDepartmentsOpen(false)}
+                        className="flex items-center justify-between py-1.5 hover:text-[#C7511F] group"
+                      >
+                        <span className="flex items-center gap-2">
+                          <span>{dept.icon}</span>
+                          <span>{dept.name}</span>
+                        </span>
+                        <ArrowRight className="w-3.5 h-3.5 text-gray-400 group-hover:text-[#C7511F] transition-transform group-hover:translate-x-0.5" />
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              {/* Programs & Features */}
+              <div className="pt-3 space-y-2">
+                <h4 className="font-bold text-gray-900 uppercase text-xs tracking-wider">
+                  Programs &amp; Features
+                </h4>
+                <ul className="space-y-1.5 text-gray-700">
+                  <li>
+                    <Link
+                      href="/sell"
+                      onClick={() => setIsDepartmentsOpen(false)}
+                      className="block py-1 hover:text-[#C7511F]"
+                    >
+                      Sell on iBNK Marketplace
+                    </Link>
+                  </li>
+                  <li>
+                    <Link
+                      href="/admin"
+                      onClick={() => setIsDepartmentsOpen(false)}
+                      className="block py-1 hover:text-[#C7511F]"
+                    >
+                      Operations Portal
+                    </Link>
+                  </li>
+                  <li>
+                    <Link
+                      href="/master-admin"
+                      onClick={() => setIsDepartmentsOpen(false)}
+                      className="block py-1 hover:text-[#C7511F]"
+                    >
+                      Master Admin Hub
+                    </Link>
+                  </li>
+                </ul>
+              </div>
+
+              {/* Help & Settings */}
+              <div className="pt-3 space-y-2">
+                <h4 className="font-bold text-gray-900 uppercase text-xs tracking-wider">
+                  Help &amp; Settings
+                </h4>
+                <ul className="space-y-1.5 text-gray-700">
+                  <li>
+                    <Link
+                      href="/account"
+                      onClick={() => setIsDepartmentsOpen(false)}
+                      className="block py-1 hover:text-[#C7511F]"
+                    >
+                      Your Account
+                    </Link>
+                  </li>
+                  <li>
+                    <Link
+                      href="/help"
+                      onClick={() => setIsDepartmentsOpen(false)}
+                      className="block py-1 hover:text-[#C7511F]"
+                    >
+                      Customer Service
+                    </Link>
+                  </li>
+                  {!isAuthenticated ? (
+                    <li>
                       <Link
                         href="/login"
                         onClick={() => setIsDepartmentsOpen(false)}
-                        className="text-center py-1.5 rounded-lg bg-[#1554D1] text-white font-bold text-xs shadow-xs hover:bg-[#0E44B0]"
+                        className="block py-1 font-bold text-blue-600 hover:underline"
                       >
                         Sign in
                       </Link>
-                      <Link
-                        href="/register"
-                        onClick={() => setIsDepartmentsOpen(false)}
-                        className="text-center py-1.5 rounded-lg bg-white border border-slate-200 text-slate-700 font-bold text-xs hover:bg-slate-50"
+                    </li>
+                  ) : (
+                    <li>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          setIsDepartmentsOpen(false);
+                          await logout();
+                          router.push("/login");
+                        }}
+                        className="block py-1 font-bold text-rose-600 hover:underline text-left w-full"
                       >
-                        Register
-                      </Link>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <div className="py-3">
-                <Link
-                  href="/deals"
-                  onClick={() => setIsDepartmentsOpen(false)}
-                  className="flex items-center justify-between p-3 rounded-2xl bg-orange-50 text-[#FF7900] font-bold text-xs"
-                >
-                  <span className="flex items-center gap-2">🔥 Flash Deals & Discounts</span>
-                  <span className="rounded-full bg-[#FF7900] px-2 py-0.5 text-[10px] text-[#172033]">Save up to 60%</span>
-                </Link>
-              </div>
-
-              <div className="pt-2 space-y-1">
-                {departments.map((dept) => (
-                  <Link
-                    key={dept.name}
-                    href={dept.href}
-                    onClick={() => setIsDepartmentsOpen(false)}
-                    className="flex items-center gap-3 rounded-xl p-2.5 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-50 hover:text-[#1554D1] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1554D1]"
-                  >
-                    <span className="text-base">{dept.icon}</span>
-                    <span>{dept.name}</span>
-                  </Link>
-                ))}
+                        Sign out
+                      </button>
+                    </li>
+                  )}
+                </ul>
               </div>
             </div>
           </div>
-          <div className="flex-1" onClick={() => setIsDepartmentsOpen(false)} />
         </div>
       )}
 
-      {/* Simplified Delivery Location Modal (OBJECTIVE 2 & 3) */}
+      {/* ======================================================== */}
+      {/* 4. Delivery Location Selection Modal                      */}
+      {/* ======================================================== */}
       {isFulfillmentOpen && (
-        <div
-          className="fixed inset-0 z-[60] flex items-center justify-center bg-[#172033]/50 p-4 backdrop-blur-sm"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) setIsFulfillmentOpen(false);
-          }}
-        >
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity"
+            onClick={() => setIsFulfillmentOpen(false)}
+          />
+
           <div
             ref={locationModalRef}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="location-modal-title"
             tabIndex={-1}
-            className="relative w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl border border-slate-200 animate-in fade-in zoom-in-95 sm:p-7 space-y-5"
+            className="relative z-10 w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl border border-gray-200 space-y-5 text-gray-900 outline-none animate-in zoom-in-95 duration-150"
           >
-            {/* Close Button */}
             <button
+              type="button"
               onClick={() => setIsFulfillmentOpen(false)}
-              className="absolute right-4 top-4 rounded-full p-2 text-[#475569] transition-colors hover:bg-slate-100 hover:text-[#172033] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1554D1]"
+              className="absolute right-4 top-4 rounded-full p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-900 transition-colors"
               aria-label="Close location modal"
             >
               <X className="h-5 w-5" />
             </button>
 
-            {/* Modal Title */}
             <div>
-              <h3 id="location-modal-title" className="text-xl font-black text-[#172033]">
-                Deliver to your location
-              </h3>
-              <p className="mt-1 text-xs text-slate-500">
-                Detect your device location or enter a 6-digit postal PIN code manually.
+              <h3 className="text-lg font-black text-gray-900">Choose your location</h3>
+              <p className="mt-1 text-xs text-gray-500">
+                Select a delivery location to see product availability and delivery options.
               </p>
             </div>
 
-            {/* Primary Action: Detect My Location */}
+            {/* GPS Detection */}
             <button
               type="button"
               onClick={detectMyLocation}
               disabled={isDetectingLocation || isCheckingLocation}
-              className="flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-[#1554D1] px-4 py-3 text-sm font-bold text-white shadow-sm transition-colors hover:bg-[#0E44B0] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1554D1] focus-visible:ring-offset-2 disabled:cursor-wait disabled:bg-slate-200 disabled:text-slate-600 active:scale-98"
+              className="flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#febd69] hover:bg-[#f3a847] px-4 py-2.5 text-xs font-bold text-[#111] shadow-xs transition-colors disabled:opacity-60"
             >
               {isDetectingLocation ? (
-                <LoaderCircle className="h-4 w-4 animate-spin" aria-hidden="true" />
+                <LoaderCircle className="h-4 w-4 animate-spin" />
               ) : (
-                <LocateFixed className="h-4 w-4" aria-hidden="true" />
+                <LocateFixed className="h-4 w-4" />
               )}
-              <span>{isDetectingLocation ? "Detecting device location…" : "Detect My Location"}</span>
+              <span>{isDetectingLocation ? "Detecting location…" : "Detect My Device Location"}</span>
             </button>
 
-            {/* Secondary Option: Manual PIN Code Input */}
+            <div className="relative flex py-1 items-center">
+              <div className="flex-grow border-t border-gray-200"></div>
+              <span className="flex-shrink mx-3 text-xs text-gray-400 uppercase font-medium">or enter an Indian pincode</span>
+              <div className="flex-grow border-t border-gray-200"></div>
+            </div>
+
+            {/* PIN Code Input */}
             <div className="space-y-2">
-              <label htmlFor="header-pin-code" className="block text-xs font-bold text-slate-700">
-                Or enter PIN code manually
-              </label>
               <div className="flex gap-2">
                 <input
                   id="header-pin-code"
                   type="text"
                   value={zipCode}
                   onChange={(e) => {
-                    setZipCodeInput(e.target.value.replace(/\D/g, "").slice(0, 6));
+                    const value = e.target.value.replace(/\D/g, "").slice(0, 6);
+                    setZipCodeInput(value);
                     setLocationPreview(null);
                     setLocationMessage("");
                   }}
                   maxLength={6}
                   inputMode="numeric"
-                  autoComplete="postal-code"
-                  placeholder="e.g. 400031 or 273015"
-                  className="min-h-11 flex-1 rounded-xl border border-[#D1D5DB] bg-white px-3.5 py-2 text-sm text-[#172033] outline-none focus:border-[#1554D1] focus:ring-2 focus:ring-[#1554D1]/20"
+                  placeholder="e.g. 273015 or 400031"
+                  className="min-h-10 flex-1 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-[#e77600] focus:ring-2 focus:ring-[#e77600]/20"
                 />
                 <button
                   type="button"
                   onClick={checkDeliveryPinCode}
                   disabled={isCheckingLocation || isDetectingLocation}
-                  className="min-h-11 shrink-0 rounded-xl bg-[#FF7900] px-5 py-2 text-xs font-bold text-[#172033] transition-colors hover:bg-[#E06A00] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1554D1] focus-visible:ring-offset-2 disabled:cursor-wait disabled:bg-slate-200 disabled:text-slate-600"
+                  className="min-h-10 shrink-0 rounded-lg bg-gray-100 hover:bg-gray-200 border border-gray-300 px-4 py-2 text-xs font-bold text-gray-800 transition-colors disabled:opacity-60"
                 >
-                  {isCheckingLocation ? "Checking…" : "Check PIN"}
+                  {isCheckingLocation ? "Applying…" : "Apply"}
                 </button>
               </div>
             </div>
 
-            {/* Location Review Box */}
+            {/* Preview Box */}
             {locationPreview && (
-              <div className="rounded-2xl border border-blue-100 bg-blue-50/50 p-4 space-y-1">
-                <h4 className="text-xs font-bold text-[#1554D1] uppercase tracking-wider">
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3 space-y-1">
+                <h4 className="text-xs font-bold text-emerald-800 uppercase tracking-wider">
                   Resolved Address
                 </h4>
-                <p className="text-xs font-semibold text-[#172033] leading-relaxed">
+                <p className="text-xs font-medium text-emerald-950 leading-relaxed">
                   {[locationPreview.landmark, locationPreview.city, locationPreview.state, locationPreview.pinCode]
                     .filter(Boolean)
                     .join(", ") || locationPreview.displayName || `PIN Code: ${locationPreview.pinCode}`}
@@ -660,39 +885,26 @@ export function Header() {
             {(locationMessage || savedLocationError) && (
               <div
                 role="status"
-                aria-live="polite"
-                className={`rounded-2xl p-3.5 text-xs font-medium leading-relaxed ${
-                  !locationMessage && savedLocationError
-                    ? "bg-rose-50 text-rose-700 border border-rose-200"
-                    : locationMessageType === "success"
-                    ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
+                className={`rounded-xl p-3 text-xs font-medium ${
+                  locationMessageType === "success"
+                    ? "bg-emerald-50 border border-emerald-200 text-emerald-800"
                     : locationMessageType === "error"
-                    ? "bg-rose-50 text-rose-700 border border-rose-200"
-                    : "bg-blue-50 text-blue-800 border border-blue-200"
+                      ? "bg-rose-50 border border-rose-200 text-rose-800"
+                      : "bg-blue-50 border border-blue-200 text-blue-800"
                 }`}
               >
                 {locationMessage || savedLocationError}
               </div>
             )}
 
-            {/* Modal Actions */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
-              <button
-                type="button"
-                onClick={confirmSelectedLocation}
-                disabled={!locationPreview || isDetectingLocation || isCheckingLocation}
-                className="min-h-11 rounded-xl bg-[#172033] hover:bg-[#28344B] px-4 py-2.5 text-xs font-bold text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
-              >
-                Use this location
-              </button>
-              <Link
-                href="/checkout"
-                onClick={() => setIsFulfillmentOpen(false)}
-                className="flex min-h-11 items-center justify-center rounded-xl border border-slate-200 bg-white hover:bg-slate-50 px-4 py-2.5 text-xs font-bold text-[#1554D1] transition-colors"
-              >
-                Enter full address at checkout
-              </Link>
-            </div>
+            <button
+              type="button"
+              onClick={confirmSelectedLocation}
+              disabled={!locationPreview}
+              className="w-full rounded-xl bg-[#FFD814] hover:bg-[#F7CA00] border border-[#FCD200] py-2.5 text-xs font-bold text-[#0F1111] shadow-xs transition-colors disabled:opacity-40 cursor-pointer"
+            >
+              Done / Use this location
+            </button>
           </div>
         </div>
       )}
